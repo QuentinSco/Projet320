@@ -22,6 +22,7 @@ namespace ConnectToProfilerSDK
         static EventClient eventClient;
         static bool result = false;            // Return boolean for FSUIPC method calls
         static int dwResult = -1;              // Variable to hold returned results
+        static int dwFSReq = 0;				// Any version of FS is OK
         static int token = -1;
         static void Main(string[] args)
         {
@@ -83,14 +84,23 @@ namespace ConnectToProfilerSDK
                 Console.ReadLine();
 
                 fsuipc.FSUIPC_Initialization();
-                Console.WriteLine("FSUIPC initialized");
+                result = fsuipc.FSUIPC_Open(dwFSReq, ref dwResult);
+                if (result)
+                {
+                    Console.WriteLine("FSUIPC initialized");
+                }
+                else
+                    Console.WriteLine("FSUIPC NOT initialized");
 
                 Console.WriteLine("Press <ENTER> to read Fuel");
                 Console.ReadLine();
 
-                result = fsuipc.FSUIPC_Read(0x0AF4, 4, ref token, ref dwResult);
-                if(result)
-                    Console.WriteLine("Fuel weight : " + dwResult/256);
+                result = fsuipc.FSUIPC_Read(0x0AF4, 2, ref token, ref dwResult);
+                if (result)
+                {
+                    Console.WriteLine("Fuel dwResult : " + dwResult);
+                    Console.WriteLine("Fuel token : " + dwResult);
+                }
                 else
                     Console.WriteLine("Read error");
 
