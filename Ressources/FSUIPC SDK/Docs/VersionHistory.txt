@@ -1,0 +1,156 @@
+Version 2.4
+=======================================
+
+* Fixed bug when using the DLL to access multiple instances of wideclient
+
+* Payload, Traffic and User Input services now work with multiple instances
+  of wideClient.
+  (Use the new ...ForClass(ClassInstance) methods to get the appropriate 
+  services object back for the class you want.
+
+  e.g. PayloadServicesForClass(1).  The original properties (e.g. PayloadServices)
+  still give back the default class 0 instance. 
+
+
+Version 2.3
+=======================================
+
+* Added Prepar3d as a version of flight sim.  
+
+* Added overloads to Open() to accept an integer as well as the flight sim version
+  enum.
+
+
+Version 2.2 - - Not publically released
+=======================================
+
+* Added PayloadServices.  Now very easy to access the payload stations and fuel tanks
+  on the player's aircraft.  The DLL supplies you with a .NET List<> of payload or
+  fuel tank objects.  Weights and fuel tank levels are supplied in a number of units
+  (percent full, Lbs, Kg, Slugs, Newtons, Gallons, Litres).  
+
+* The DLL also supplies calculated data such as Zero Fuel Weight and total aircraft 
+  weight.
+
+* Individual fuel tank levels can be changed using %, Gallons, Litres, Lbs, Kgs,
+  Newtons or Slugs.
+
+* Individual Payload station weights can be changed using Lbs, Kgs, Newtons or Slugs.
+
+* Fixed bug in calculating distance and bearing between two FSLonLatPoints.  The
+  problem was most noticable on large distances (> 400nm).
+
+
+Version 2.1 - Not publically released
+=====================================
+
+* Added UserInputServices helper class.  Now very easy to use the FSUIPC user input 
+  facilities to trap key presses and joystick button presses from inside Flight Sim.  
+
+* Also allows for your own menu items to be added to the 'Modules' (<=FS9) or 
+  'Add Ons' (FSX) menu.  You can respond to the user selecting these menu items in
+  your own application.
+
+
+Version 2.0
+============
+
+* Slight change of Licence terms.  If you want to use this DLL in a Freeware, Shareware
+  or Commercial application, it is now required that you credit the use of this DLL 
+  and its author.  See the new user guide for details.
+  
+* You can now create more than one Offset with the same address.
+
+* Added the ability to process multiple offset groups in a single process() call.
+
+* Added a property to get the current version of flight sim you are connected to.
+
+* Added a feature to read AI Traffic Information from FSUIPC.  AI Planes are returned
+  to you as a strongly-typed List<> of AIPlaneInfo instances.  AIPlaneInfo provides 
+  all information available from FSUIPC plus lots of extra info (e.g. Distance and 
+  Bearing from the player) in a ready-to-use .NET class.
+
+* Added a feature to write into the internal FSUIPC AI Traffic Tables.  This does not 
+  add AI planes into flight sim.
+
+* Added classes for dealing with Longitudes and Latitiudes.  These understand the raw
+  FS Units provided by FSUIPC (both the 8-Byte and 4-Byte types) so convertion to and 
+  from degrees is easy.  Also has a very flexible ToString() method to enable output 
+  in a number of human-readable formats.
+
+* Added classes for dealing with Longitude and Latitude Spans (distances).  These 
+  classes can be used to convert Lon/Lat spans to and from metres or feet.  Lon/Lat 
+  spans can be calculated between two Lon/Lats.
+
+* Added a class to deal with a Lon/Lat point.  This represents a point on the Earth 
+  but can also be used to calculate the distance and/or bearing to another point.
+
+* Added a class representing a Quadrilateral area on the Earth.  Its primary function
+  is to test if a lon/lat point is contained within the Quadrilateral. This is usefull
+  for testing if you are on a runway.  The Quadrilateral can be generated from a set of
+  four Lat/Lon points, or from basic runway information such as that found in the 
+  output of MakeRunways.exe by Pete Dowson. 
+
+* It is now possible to connect to multiple instances of WideFS on the same machine 
+  using this DLL.
+
+* Re-formatted and extended the User Guide.  
+
+* Completely new reference documentation produced using DoxyGen for a much-improved HTML
+  reference manual.
+
+* Updated the example application in C# and VB.NET.  Now contains demonstrations of the
+  new features including an AI Traffic Radar display.
+
+
+
+Version 1.4 - Not publically released
+======================================
+
+Beta versions of various features that eventually became the 2.0 release.
+
+
+
+Version 1.3
+============
+
+* Fixed error in string encoding where certain symbols were corrupted when writing to FS
+
+* Offsets are now written to the IPC file in the order they are created.  This problem 
+  will not have affected most people but some offsets (like the ones to send text to FS) 
+  are sensitive to the order in which they appear in the IPC file.
+
+* FSUIPCConnection.DisconnetGroup() has been depreciated and replaced by 
+  FSUIPCCOnnection.DeleteGroup().  DisconnectGroup was a bad name.  From now on you cannot
+  compile a project that calls DisconnectGroup().  However, projects already compiled that 
+  use this method will containue to function as before.
+
+* Added a new property DLLVersion to FSUIPCConnection.  This returns a version object 
+  representing the version of the client DLL.
+
+* Added FSX to the FlightSim enum so that you can now write apps that only connect to FSX.
+
+
+
+Version 1.2 - Not publically released
+======================================
+
+* Fixed error in connection code where a failed connection could lead to never being 
+  able to connect.
+
+* Fixed error in string handling that could cause some strings from FSUIPC to be corrupted.
+
+
+
+Version 1.1
+============
+
+* support added for System.Single type. (AKA float, 32-Bit float)
+* Fixed a small write bug
+
+
+
+Version 1.0
+============
+
+* Initial public release

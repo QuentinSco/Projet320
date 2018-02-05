@@ -1,0 +1,5 @@
+<map id="G" name="G">
+<area shape="rect" id="node2" href="$structFSUIPC_1_1FsLatLonPoint.html" title="A point in the Flight Simulator world represented by a longitude and latitude." alt="" coords="55,101,161,131"/>
+<area shape="rect" id="node4" href="$structFSUIPC_1_1FsLongitude.html" title="A structure representing a longitude value in MS Flight Simulator." alt="" coords="5,5,99,35"/>
+<area shape="rect" id="node6" href="$structFSUIPC_1_1FsLatitude.html" title="A structure representing a latitude value in MS Flight Simulator." alt="" coords="123,5,205,35"/>
+</map>
