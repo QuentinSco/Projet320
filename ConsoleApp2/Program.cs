@@ -7,9 +7,11 @@ namespace ConnectToProfilerSDK
     using System.Net.Sockets;
     using SkalarkiIO.SDK;
     using System.Timers;
+    using FsuipcSdk;
 
     class Program
     {
+        static Fsuipc fsuipc = new Fsuipc();	// Our main fsuipc object!
         static string fuel = "10.0";
         static string actual = "10.0";
         static int entactu = 10;
@@ -18,6 +20,9 @@ namespace ConnectToProfilerSDK
         static int dec = 0;
         static bool IsOn = false;
         static EventClient eventClient;
+        static bool result = false;            // Return boolean for FSUIPC method calls
+        static int dwResult = -1;              // Variable to hold returned results
+        static int token = -1;
         static void Main(string[] args)
         {
 
@@ -74,7 +79,24 @@ namespace ConnectToProfilerSDK
                 eventClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "---");
                 eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "---");
 
+                Console.WriteLine("Press <ENTER> to connect FSUIPC");
+                Console.ReadLine();
 
+                fsuipc.FSUIPC_Initialization();
+                Console.WriteLine("FSUIPC initialized");
+
+                Console.WriteLine("Press <ENTER> to read Fuel");
+                Console.ReadLine();
+
+                result = fsuipc.FSUIPC_Read(0x0AF4, 4, ref token, ref dwResult);
+                if(result)
+                    Console.WriteLine("Fuel weight : " + dwResult/256);
+                else
+                    Console.WriteLine("Read error");
+
+                fsuipc.FSUIPC_Close();
+
+                Console.WriteLine("FSUIPC closed");
 
                 Console.WriteLine("Press <ENTER> to reset display text");
                 Console.ReadLine();
@@ -146,8 +168,8 @@ namespace ConnectToProfilerSDK
                     if(!IsOn)
                     {
                         eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, false);
-                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "---");
-                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "---");
+                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "   ");
+                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "   ");
                         eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
                         eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, false);
                     }

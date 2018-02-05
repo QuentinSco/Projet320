@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.27004.2009
+VisualStudioVersion = 15.0.27130.2027
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsoleApp2", "ConsoleApp2\ConsoleApp2.csproj", "{914E0721-67D2-4F43-B145-BB328DCDE155}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RefuelProto", "ConsoleApp2\RefuelProto.csproj", "{914E0721-67D2-4F43-B145-BB328DCDE155}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

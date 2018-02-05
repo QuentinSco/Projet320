@@ -1,0 +1,10 @@
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\bin\Debug\ConsoleApp2.exe.config
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\bin\Debug\ConsoleApp2.exe
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\bin\Debug\ConsoleApp2.pdb
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\bin\Debug\System.Threading.Tasks.Dataflow.dll
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\bin\Debug\SkalarkiIO.SDK.Telemetry.dll
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\bin\Debug\Microsoft.Diagnostics.Tracing.EventSource.dll
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\obj\Debug\RefuelProto.csprojResolveAssemblyReference.cache
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\obj\Debug\RefuelProto.csproj.CoreCompileInputs.cache
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\obj\Debug\ConsoleApp2.exe
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\obj\Debug\ConsoleApp2.pdb
