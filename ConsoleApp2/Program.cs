@@ -24,6 +24,7 @@ namespace ConnectToProfilerSDK
         static int dwResult = -1;              // Variable to hold returned results
         static int dwFSReq = 0;				// Any version of FS is OK
         static int token = -1;
+        static float FobT = .0f;
         static void Main(string[] args)
         {
 
@@ -95,13 +96,46 @@ namespace ConnectToProfilerSDK
                 Console.WriteLine("Press <ENTER> to read Fuel");
                 Console.ReadLine();
 
-                result = fsuipc.FSUIPC_Read(0x0AF4, 2, ref token, ref dwResult);
-                if (result)
+                byte[] buffer = new byte[255];
+
+                result = fsuipc.FSUIPC_Read(0x30C8, 8, ref token, ref dwResult);
+                result = fsuipc.FSUIPC_Process(ref dwResult);
+
+                result = fsuipc.FSUIPC_Get(ref token, 8, ref buffer);
+
+                double loaded = BitConverter.ToDouble(buffer, 0);
+
+                loaded = (loaded * 32.174049);
+                Console.WriteLine("Current mass in lbs: " + loaded);
+
+                result = fsuipc.FSUIPC_Read(0x3BFC, 4, ref token, ref dwResult);
+                result = fsuipc.FSUIPC_Process(ref dwResult);
+                result = fsuipc.FSUIPC_Get(ref token, ref dwResult);
+                float zfw = dwResult / 256;
+                Console.WriteLine("ZFW in lbs: " + zfw);
+
+                dwResult = -1;
+                token = -1;
+
+                float fob = (float)loaded - zfw;
+
+                float fobKg = fob * 0.45359237f;
+
+                Console.WriteLine("FOB in lbs: " + fob);
+                Console.WriteLine("FOB in kg: " + fobKg);
+
+                FobT = fobKg / 1000;
+                actual = FobT.ToString();
+                fuel = FobT.ToString();
+
+                //float fob = (float)mass - zfw;
+
+                /*if (result)
                 {
-                    Console.WriteLine("Fuel dwResult : " + dwResult);
-                    Console.WriteLine("Fuel token : " + dwResult);
+                    Console.WriteLine("Fuel on board : " + fob);
                 }
-                else
+                else*/
+                if (!result)
                     Console.WriteLine("Read error");
 
                 fsuipc.FSUIPC_Close();

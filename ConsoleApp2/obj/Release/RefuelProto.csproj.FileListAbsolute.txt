@@ -1,1 +1,2 @@
 C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\obj\Release\RefuelProto.csproj.CoreCompileInputs.cache
+C:\Users\quent_000\Documents\Cours 2017-2018\Projet320\GitProjet320\ConsoleApp2\obj\Release\RefuelProto.csprojResolveAssemblyReference.cache
