@@ -85,7 +85,7 @@ namespace ConnectToProfilerSDK
                 Console.ReadLine();
 
                 fsuipc.FSUIPC_Initialization();
-                result = fsuipc.FSUIPC_Open(dwFSReq, ref dwResult);
+                result = fsuipc.FSUIPC_Open(dwFSReq, ref dwResult); //Ouverture de la connexion avec FSUIPC
                 if (result)
                 {
                     Console.WriteLine("FSUIPC initialized");
@@ -98,28 +98,28 @@ namespace ConnectToProfilerSDK
 
                 byte[] buffer = new byte[255];
 
-                result = fsuipc.FSUIPC_Read(0x30C8, 8, ref token, ref dwResult);
+                result = fsuipc.FSUIPC_Read(0x30C8, 8, ref token, ref dwResult); //Lecture de la masse de l'avion
                 result = fsuipc.FSUIPC_Process(ref dwResult);
 
                 result = fsuipc.FSUIPC_Get(ref token, 8, ref buffer);
 
-                double loaded = BitConverter.ToDouble(buffer, 0);
-
-                loaded = (loaded * 32.174049);
+                double loaded = BitConverter.ToDouble(buffer, 0); //Conversion du tableau de bytes en double
+                 
+                loaded = (loaded * 32.174049); //Conversion de slug en lbs
                 Console.WriteLine("Current mass in lbs: " + loaded);
-
-                result = fsuipc.FSUIPC_Read(0x3BFC, 4, ref token, ref dwResult);
+                 
+                result = fsuipc.FSUIPC_Read(0x3BFC, 4, ref token, ref dwResult); //Lecture du Zero Fuel Weight (masse de l'avion + chargement - fuel)
                 result = fsuipc.FSUIPC_Process(ref dwResult);
                 result = fsuipc.FSUIPC_Get(ref token, ref dwResult);
-                float zfw = dwResult / 256;
+                float zfw = dwResult / 256; //Conversion demandée par FSUIPC
                 Console.WriteLine("ZFW in lbs: " + zfw);
 
                 dwResult = -1;
                 token = -1;
 
-                float fob = (float)loaded - zfw;
+                float fob = (float)loaded - zfw; //Calcul du fuel on board (FOB)
 
-                float fobKg = fob * 0.45359237f;
+                float fobKg = fob * 0.45359237f; //Conversion du FOB en KG
 
                 Console.WriteLine("FOB in lbs: " + fob);
                 Console.WriteLine("FOB in kg: " + fobKg);
