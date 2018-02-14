@@ -11,24 +11,19 @@ namespace ConnectToProfilerSDK
 
     class Program
     {
-        static Fsuipc fsuipc = new Fsuipc();	// Our main fsuipc object!
-        static string fuel = "10.0";
-        static string actual = "10.0";
-        static int entactu = 10;
-        static int decactu = 0;
-        static int ent = 10;
-        static int dec = 0;
-        static bool IsOn = false;
+        static Fsuipc fsuipc = new Fsuipc();    // Our main fsuipc object!
         static EventClient eventClient;
         static bool result = false;            // Return boolean for FSUIPC method calls
         static int dwResult = -1;              // Variable to hold returned results
-        static int dwFSReq = 0;				// Any version of FS is OK
+        static int dwFSReq = 0;             // Any version of FS is OK
         static int token = -1;
         static float FobT = .0f;
+
+
         static void Main(string[] args)
         {
 
-            var localIP = GetLocalIPAddress();
+            IPAddress localIP = GetLocalIPAddress();
             using (eventClient = new EventClient(localIP, 53000, (e, s) => { OnHardwareEvent(e, s); }, null))
             {
                 eventClient.ConnectionStateChanged += (s, a) =>
@@ -155,10 +150,266 @@ namespace ConnectToProfilerSDK
                 eventClient.Disconnect();
             }
         }
-        private static void OnHardwareEvent(IOEvent hardwareEvent, object state)
+
+        private static IPAddress GetLocalIPAddress()
+        {
+            return Dns.GetHostAddresses(
+                Dns.GetHostName())
+                .Where((ip) => ip.AddressFamily == AddressFamily.InterNetwork)
+                .FirstOrDefault();
+        }
+    }
+
+
+// To use this class : link OnHardwareEvent(), provide EventClient and Fsuipc objects through Setup();
+    class FAQUBrickRefuelling
+    {
+        private static final float FUEL_STEP = 0.1;
+        private static final int TIMER_INTERVAL = 500;
+
+        private enum State {Offline, Off, Selection, Refuelling, Finished, Fault};
+        private State currentState;
+        private EventClient hardwareClient;
+        private Fsuipc fsuipcClient;
+        private Timer timer;
+
+        private float preselectedFuel;
+        private float actualFuel;
+
+        FAQUBrickRefuelling()
+        {
+            SetNextState(State.Offline);
+        }
+
+        public bool Setup(EventClient skarlaki, Fsuipc fsuipc)
+        {
+            this.hardwareClient = skarlaki;
+            this.fsuipcClient = fsuipc;
+
+            // TODO if hardwareClient not connected, do something
+            // TODO if fsuipc not connected, try to perform connection
+            //      if fail --> state = FAULT
+            // TODO get aircraft's max fuel capacity
+
+            SetNextState(State.Off);
+        }
+
+        public void OnHardwareEvent(IOEvent hardwareEvent, object state)
+        {
+            // Filter (Group = Refuel) and (Source = Switch) and (Event = True)
+            if ((hardwareEvent.Group == Group.REFUEL) && (hardwareEvent.Source == HardwareSource.Switch) && (hardwareEvent.ValueAsBool() == true))
+            {
+                switch(currentState)
+                {
+                    case State.Off:
+                    {
+                        if (hardwareEvent.Event == Event.POWER)
+                        {
+                            SetNextState(State.Selection);
+                        }
+                        break;
+                    }
+                    case State.Selection:
+                    {
+                        switch(hardwareEvent.Event)
+                        {
+                            case Event.POWER:
+                            {
+                                SetNextState(State.Off);
+                                break;
+                            }
+                            case Event.INCREASE:
+                            {
+                                IncreasePreselectedFuel();
+                                break;
+                            }
+                            case Event.DECREASE:
+                            {
+                                DecreasePreselectedFuel();
+                            }
+                            case Event.REFUEL:
+                            {
+                                SetNextState(State.Refuelling);
+                                StartRefuel();
+                            }
+                        }
+                        break;
+                    }
+                    case State.Refuelling:
+                    {
+                        switch(hardwareEvent.Event)
+                        {
+                            case Event.POWER:
+                            {
+                                SetNextState(State.Off);
+                                break;
+                            }
+                            case Event.REFUEL:
+                            {
+                                SetNextState(State.Selection);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case State.Finished:
+                    {
+                        switch(hardwareEvent.Event)
+                        {
+                            case Event.POWER:
+                            {
+                                SetNextState(State.Off);
+                                break;
+                            }
+                        }
+                        break;
+                    }
+                    case State.Fault:
+                    {
+                        // TODO
+                        break;
+                    }
+                }
+                UpdateLCD();
+            }
+        }
+
+        private void UpdateLCD()
+        {
+            switch(currentState)
+            {
+                case State.Off:
+                {
+                    hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL,         "   ");
+                    hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED,    "   ");
+                    break;
+                }
+                case State.Selection:
+                case State.Refuelling:
+                case State.Finished:
+                {
+                    hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL,      this.actualFuel);
+                    hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, this.preselectedFuel);
+                    break;
+                }
+                case State.Fault:
+                {
+                    hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "---");
+                    hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "---");
+                    break;
+                }
+            }
+        }
+
+        private void SetNextState(State nextState)
+        {
+            this.currentState = nextState;
+
+            switch(currentState)
+            {
+                case State.Off:
+                {
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON },     false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT },  false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELON },  false); // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELFLT }, false); // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END },       false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT },      false);
+                    break;
+                }
+                case State.Selection:
+                {
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON },     true);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT },  false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELON },  false); // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELFLT }, false); // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END },       false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT },      true);
+                    this.preselectedFuel = ; // TODO get from FSUIPC
+                    this.actualFuel = ; // TODO get from FSUIPC
+                    break;
+                }
+                case State.Refuelling:
+                {
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON },     true);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT },  false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELON },  true);  // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELFLT }, false); // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END },       false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT },      true);
+                }
+                case State.Finished:
+                {
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON },     true);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT },  false);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELON },  false); // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELFLT }, false); // todo
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END },       true);
+                    hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT },      true);
+                }
+            }
+        }
+
+        private void StartRefuel()
+        {
+            timer = new Timer();
+            timer.Interval = TIMER_INTERVAL;
+
+            // Hook up the Elapsed event for the timer. 
+            timer.Elapsed += (sender, args) =>
+            {
+                DoRefuel();
+            };
+
+            // Have the timer fire repeated events (true is the default)
+            tiemr.AutoReset = true;
+
+            // Start the timer
+            timer.Enabled = true;
+        }
+
+        private void IncreasePreselectedFuel()
+        {
+            this.preselectedFuel += FUEL_STEP;
+        }
+
+        private void DecreasePreselectedFuel()
+        {
+            this.preselectedFuel -= FUEL_STEP;
+        }
+
+        private void DoRefuel()
+        {
+            if(this.preselectedFuel > this.actualFuel)
+            {
+                this.actualFuel += FUEL_STEP;
+            }
+            else if (this.preselectedFuel < this.actualFuel)
+            {
+                this.actualFuel -= FUEL_STEP;
+            }
+            else
+            {
+                timer.Dispose();
+                SetNextState(State.Finished);
+            }
+            UpdateFSUIPC();
+            UpdateLCD();
+        }
+
+        private void UpdateFSUIPC()
+        {
+            // TODO send to FSUIPC the actual value
+            // TODO if no connection --> stete = FAULT and (timer.dispose()!)
+        }
+    }
+
+}
+
+        /*private static void OnHardwareEvent(IOEvent hardwareEvent, object state)
         {
 
-            /*switch (hardwareEvent.Source)
+            switch (hardwareEvent.Source)
             {
                 case HardwareSource.Switch:
                     Console.WriteLine("Received button {0} {1} state {2}",
@@ -180,123 +431,5 @@ namespace ConnectToProfilerSDK
                 default:
                     Console.WriteLine("Received an event {0} state {1}", hardwareEvent.Event, hardwareEvent.ValueAsBool());
                     break;
-            }*/
-            if (hardwareEvent.Source == HardwareSource.Switch && hardwareEvent.ValueAsBool() == true)
-            {
-                if(hardwareEvent.Event == Event.INCREASE && hardwareEvent.Group == Group.REFUEL)
-                {
-                    IncreasePreselectedFuel();
-                    fuel = ent.ToString() + "." + dec.ToString();
-                    eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, fuel);
-                }
-                if (hardwareEvent.Event == Event.DECREASE && hardwareEvent.Group == Group.REFUEL)
-                {
-                    DecreasePreselectedFuel();
-                    fuel = ent.ToString() + "." + dec.ToString();
-                    eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, fuel);
-                }
-                if(hardwareEvent.Event == Event.REFUELING && hardwareEvent.ValueAsBool() == true)
-                {
-                    StartRefuel(fuel);
-                }
-                if(hardwareEvent.Event == Event.POWER && hardwareEvent.Group == Group.REFUEL/* && hardwareEvent.ValueAsBool() == true*/)
-                {
-                    IsOn = !IsOn;
-                    if(IsOn)
-                    {
-                        eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, true);
-                        eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
-                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, actual);
-                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, fuel);
-                    }
-                    if(!IsOn)
-                    {
-                        eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, false);
-                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "   ");
-                        eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "   ");
-                        eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
-                        eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, false);
-                    }
-                }
             }
-        }
-
-        protected static void IncreasePreselectedFuel()
-        {
-            if (dec == 9)
-            {
-                ent++;
-                dec = 0;
-            }
-            else
-                dec++;
-        }
-
-        protected static void IncreaseFuel()
-        {
-            if (decactu == 9)
-            {
-                entactu++;
-                decactu = 0;
-            }
-            else
-                decactu++;
-        }
-
-        protected static void DecreasePreselectedFuel()
-        {
-            if (dec == 0)
-            {
-                ent--;
-                dec = 9;
-            }
-            else
-                dec--;
-        }
-
-        protected static void RefreshActual()
-        {
-            actual = entactu.ToString() + "." + decactu.ToString();
-            eventClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, actual);
-        }
-
-        private static Timer aTimer;
-
-        protected static void StartRefuel(string obj)
-        {
-            aTimer = new Timer();
-            aTimer.Interval = 500;
-
-            // Hook up the Elapsed event for the timer. 
-            aTimer.Elapsed += (sender, args) =>
-            {
-                if(actual!=fuel)
-                {
-                    IncreaseFuel();
-                    RefreshActual();
-                }
-                else
-                {
-                    eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, true);
-                    aTimer.Dispose();
-                }
-                    
-            };
-
-            // Have the timer fire repeated events (true is the default)
-            aTimer.AutoReset = true;
-
-            // Start the timer
-            aTimer.Enabled = true;
-        }
-
-
-        private static IPAddress GetLocalIPAddress()
-        {
-            return Dns.GetHostAddresses(
-                Dns.GetHostName())
-                .Where((ip) => ip.AddressFamily == AddressFamily.InterNetwork)
-                .FirstOrDefault();
-        }
-    }
-}
+        }*/
