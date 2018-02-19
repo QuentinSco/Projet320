@@ -383,6 +383,16 @@ namespace ConnectToProfilerSDK
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
                         break;
                     }
+                case State.Fault:
+                    {
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, false);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, true);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, false);
+                        break;
+                    }
             }
         }
 
