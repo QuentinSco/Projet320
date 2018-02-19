@@ -183,28 +183,38 @@ namespace ConnectToProfilerSDK
             int dwFSReq = 0;             // Any version of FS is OK
             int dwResult = -1;              // Variable to hold returned results
             IPAddress localIP = GetLocalIPAddress();
-            skarlaki.ConnectionStateChanged += (s, a) =>
-            {
-                Console.WriteLine("Client is now {0}", a.Connected ? "connected" : "not connected");
-                if (a.Connected == true)
-                {
-                    SetNextState(State.Off);
-                }
-                else
-                    SetNextState(State.Fault);
-            };
+
 
             Console.WriteLine("Press <ENTER> to connect to the SkalarkiIO Profiler");
             Console.ReadLine();
 
             try
             {
-                skarlaki.ConnectAsync().Wait();
+                hardwareClient.ConnectAsync().Wait();
             }
             catch(Exception e)
             {
                 Console.WriteLine(e.Message);
             }
+
+            hardwareClient.ConnectionStateChanged += (s, a) =>
+            {
+                Console.WriteLine("Client is now {0}", a.Connected ? "connected" : "not connected");
+                if (a.Connected == true)
+                {
+
+                    SetNextState(State.Off);
+                }
+                else
+                    SetNextState(State.Fault);
+            };
+
+            hardwareClient.ConnectedDevicesChanged += (s, a) =>
+            {
+                Console.WriteLine("Hardware {0} has {1}", a.Device, a.Connected ? "connected" : "disconnected");
+                var totalEvents = Switches.OVHD.All.Concat(Encoders.OVHD.All);
+                hardwareClient.RegisterEvents(totalEvents);
+            };
 
             fsuipc.FSUIPC_Initialization();
             result = fsuipc.FSUIPC_Open(dwFSReq, ref dwResult); //Ouverture de la connexion avec FSUIPC
@@ -429,7 +439,7 @@ namespace ConnectToProfilerSDK
                 timer.Dispose();
                 SetNextState(State.Finished);
             }
-            UpdateFSUIPC();
+            UpdateFSUIPC(fsuipcClient);
             UpdateLCD();
         }
 
@@ -455,7 +465,6 @@ namespace ConnectToProfilerSDK
             result = fsuipc.FSUIPC_Process(ref dwResult);
             result = fsuipc.FSUIPC_Get(ref token, ref dwResult);
             float zfw = dwResult / 256; //Conversion demandée par FSUIPC
-            Console.WriteLine("ZFW in lbs: " + zfw);
 
             dwResult = -1;
             token = -1;
@@ -464,7 +473,11 @@ namespace ConnectToProfilerSDK
 
             float fobKg = fob * 0.45359237f; //Conversion du FOB en KG
 
-            return fobKg;
+            Console.WriteLine("FOB in Kgs: " + fobKg);
+
+            GetMaxFuelCapacity(fsuipc);
+
+            return fobKg/1000;
         }
 
         private float GetMaxFuelCapacity(Fsuipc fsuipc)
@@ -474,7 +487,9 @@ namespace ConnectToProfilerSDK
             int token = -1;
             float capacityUSGal = 0;
             float capacityL = 0;
-            Int32[] AddrTab = new Int32[6] { 0x0B80, 0x0B88, 0x0B90, 0x0B98, 0x0BA0, 0x0BA8 };
+            float fuelweightLbsGal =0;
+            float fuelweightKgL =0;
+            Int32[] AddrTab = new Int32[7] { 0x0B78, 0x0B80, 0x0B88, 0x0B90, 0x0B98, 0x0BA0, 0x0BA8 }; //0 : centre, 1 : aile gauche, 4 : aile droite
             foreach (Int32 adr in AddrTab)
             {
                 result = fsuipc.FSUIPC_Read(adr, 4, ref token, ref dwResult); //Lecture du Zero Fuel Weight (masse de l'avion + chargement - fuel)
@@ -482,11 +497,35 @@ namespace ConnectToProfilerSDK
                 result = fsuipc.FSUIPC_Get(ref token, ref dwResult);
                 capacityUSGal += dwResult;
             }
-            return capacityL = 3.78541f * capacityUSGal;
+
+            result = fsuipc.FSUIPC_Read(0x0AF4, 4, ref token, ref dwResult); //Lecture de la masse volumique du carburant
+            result = fsuipc.FSUIPC_Process(ref dwResult);
+            result = fsuipc.FSUIPC_Get(ref token, ref dwResult);
+            dwResult /= 256; //opération requise par FSUIPC
+
+            fuelweightLbsGal = dwResult;
+
+            fuelweightKgL = 0.1198264f * fuelweightLbsGal;
+
+            capacityL = 3.78541f * capacityUSGal;
+
+            Console.WriteLine("max capacity en UsGal : " + capacityUSGal);
+            Console.WriteLine("max capacity en Kg : " + (fuelweightKgL * capacityL));
+
+
+            return capacityL;
+
         }
 
-        private void UpdateFSUIPC()
+        private void UpdateFSUIPC(Fsuipc fsuipc)
         {
+            bool result = false;            // Return boolean for FSUIPC method calls
+            int dwResult = -1;              // Variable to hold returned results
+            int token = -1;
+
+            //fsuipc.FSUIPC_Write();
+
+            //result = fsuipc.FSUIPC_Process(ref dwResult);
             // TODO send to FSUIPC the actual value
             // TODO if no connection --> stete = FAULT and (timer.dispose()!)
         }
