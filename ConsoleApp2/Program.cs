@@ -19,14 +19,22 @@ namespace ConnectToProfilerSDK
         static int token = -1;
         static float FobT = .0f;
 
+        private static IPAddress GetLocalIPAddress()
+        {
+            return Dns.GetHostAddresses(
+                Dns.GetHostName())
+                .Where((ip) => ip.AddressFamily == AddressFamily.InterNetwork)
+                .FirstOrDefault();
+        }
 
         static void Main(string[] args)
         {
             FAQUBrickRefuelling fAQU = new FAQUBrickRefuelling();
+            IPAddress localIP = GetLocalIPAddress();
+            fAQU.Setup(new EventClient(localIP, 53000, (e, s) => { fAQU.OnHardwareEvent(e, s); }, null), fsuipc);
+            Console.ReadLine();
 
-            fAQU.Setup(eventClient, fsuipc);
-
-            /*IPAddress localIP = GetLocalIPAddress();
+            /*
             using (eventClient = new EventClient(localIP, 53000, (e, s) => { OnHardwareEvent(e, s); }, null))
             {
                 eventClient.ConnectionStateChanged += (s, a) =>
@@ -138,15 +146,9 @@ namespace ConnectToProfilerSDK
 
                 eventClient.Disconnect();
             }
-        }
-
-        /*private static IPAddress GetLocalIPAddress()
-        {
-            return Dns.GetHostAddresses(
-                Dns.GetHostName())
-                .Where((ip) => ip.AddressFamily == AddressFamily.InterNetwork)
-                .FirstOrDefault();
         }*/
+
+
         }
     }
 
@@ -181,33 +183,27 @@ namespace ConnectToProfilerSDK
             int dwFSReq = 0;             // Any version of FS is OK
             int dwResult = -1;              // Variable to hold returned results
             IPAddress localIP = GetLocalIPAddress();
-            using (skarlaki = new EventClient(localIP, 53000, (e, s) =>
+            skarlaki.ConnectionStateChanged += (s, a) =>
             {
-                OnHardwareEvent(e, s);
-            }, null))
+                Console.WriteLine("Client is now {0}", a.Connected ? "connected" : "not connected");
+                if (a.Connected == true)
+                {
+                    SetNextState(State.Off);
+                }
+                else
+                    SetNextState(State.Fault);
+            };
+
+            Console.WriteLine("Press <ENTER> to connect to the SkalarkiIO Profiler");
+            Console.ReadLine();
+
+            try
             {
-                skarlaki.ConnectionStateChanged += (s, a) =>
-                {
-                    Console.WriteLine("Client is now {0}", a.Connected ? "connected" : "not connected");
-                    if (a.Connected == true)
-                    {
-                        SetNextState(State.Off);
-                    }
-                    else
-                        SetNextState(State.Fault);
-                };
-
-                Console.WriteLine("Press <ENTER> to connect to the SkalarkiIO Profiler");
-                Console.ReadLine();
-
-                try
-                {
-                    skarlaki.ConnectAsync().Wait();
-                }
-                catch(Exception e)
-                {
-                    Console.WriteLine(e.Message);
-                }
+                skarlaki.ConnectAsync().Wait();
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine(e.Message);
             }
 
             fsuipc.FSUIPC_Initialization();
@@ -229,6 +225,8 @@ namespace ConnectToProfilerSDK
 
         public void OnHardwareEvent(IOEvent hardwareEvent, object state)
         {
+            Console.WriteLine("Hardware event : " + hardwareEvent);
+
             // Filter (Group = Refuel) and (Source = Switch) and (Event = True)
             if ((hardwareEvent.Group == Group.REFUEL) && (hardwareEvent.Source == HardwareSource.Switch) && (hardwareEvent.ValueAsBool() == true))
             {
@@ -338,6 +336,7 @@ namespace ConnectToProfilerSDK
 
         private void SetNextState(State nextState)
         {
+            Console.WriteLine("Next state : " + nextState);
             this.currentState = nextState;
 
             switch (currentState)
