@@ -184,25 +184,30 @@ namespace ConnectToProfilerSDK
             this.fsuipcClient = fsuipc;
 
 
-            bool result = false;        // Return boolean for FSUIPC method calls
-            int dwFSReq = 0;            // Any version of FS is OK
-            int dwResult = -1;          // Variable to hold returned results
+            
 
-            hardwareClient.ConnectionStateChanged += (s, a) =>
+            this.hardwareClient.ConnectionStateChanged += (s, a) =>
             {
+                bool result;
+                int dwFSReq = 0;            // Any version of FS is OK
+                int dwResult = -1;          // Variable to hold returned results
                 if (a.Connected)
                 {
-                    if(currentState == State.Offline)
+                    if(this.currentState == State.Offline)
                     {
                         this.fsuipcClient.FSUIPC_Initialization();
-                        result = this.fsuipcClient.FSUIPC_Open(dwFSReq, ref dwResult);
-                        // TODO put a time out, check the results (where;s the doc?)
-                        // if not succes, otherwise state = FAULT
-                        while (!result)
-                            result = this.fsuipcClient.FSUIPC_Open(dwFSReq, ref dwResult);
 
-                        this.maxFuelCapacity = GetMaxFuelCapacity();
-                        this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
+                        result = this.fsuipcClient.FSUIPC_Open(dwFSReq, ref dwResult);
+                        if(result)
+                        {
+                            this.maxFuelCapacity = GetMaxFuelCapacity();
+                            this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
+                            SetNextState(State.Off);
+                        }
+                        else
+                        {
+                            SetNextState(State.Fault);
+                        }
                     }
                 }
                 else
