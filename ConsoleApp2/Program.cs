@@ -31,8 +31,19 @@ namespace ConnectToProfilerSDK
         {
             FAQUBrickRefuelling fAQU = new FAQUBrickRefuelling();
             IPAddress localIP = GetLocalIPAddress();
-            fAQU.Setup(new EventClient(localIP, 53000, (e, s) => { fAQU.OnHardwareEvent(e, s); }, null), fsuipc);
-            Console.ReadLine();
+
+            using (eventClient = new EventClient(localIP, 53000, (e, s) => { fAQU.OnHardwareEvent(e, s); }, null))
+            {
+                eventClient.ConnectedDevicesChanged += (s, a) =>
+                {
+                    Console.WriteLine("Hardware {0} has {1}", a.Device, a.Connected ? "connected" : "disconnected");
+                };
+
+                fAQU.Setup(eventClient, fsuipc);
+
+                Console.ReadLine();
+                eventClient.Disconnect();
+            }
 
             /*
             using (eventClient = new EventClient(localIP, 53000, (e, s) => { OnHardwareEvent(e, s); }, null))
@@ -59,21 +70,11 @@ namespace ConnectToProfilerSDK
                 //var totalEvents = Switches.GLARE.All.Concat(Encoders.GLARE.All);
                 var totalEvents = Switches.OVHD.All.Concat(Encoders.OVHD.All);
 
-                eventClient.RegisterEvents(totalEvents);
-
-
-                eventClient.SetOutputs(new[] { Outputs.OVHD.FIRE.APUFIRE }, true);
+                eventClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
 
                 Console.WriteLine("Press <ENTER> to set display text");
                 Console.ReadLine();
 
-                Random rnd = new Random();
-                //ent = rnd.Next(10, 15);
-                //dec = rnd.Next(0, 9);
-                eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
-                eventClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, false);
-                eventClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "---");
-                eventClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "---");
 
                 Console.WriteLine("Press <ENTER> to connect FSUIPC");
                 Console.ReadLine();
@@ -152,8 +153,6 @@ namespace ConnectToProfilerSDK
         }
     }
 
-
-
     // To use this class : link OnHardwareEvent(), provide EventClient and Fsuipc objects through Setup();
     class FAQUBrickRefuelling
     {
@@ -168,10 +167,14 @@ namespace ConnectToProfilerSDK
 
         private float preselectedFuel;
         private float actualFuel;
+        private float maxFuelCapacity;
 
         public FAQUBrickRefuelling()
         {
             SetNextState(State.Offline);
+            this.preselectedFuel = 0;
+            this.maxFuelCapacity = 0;
+            this.actualFuel = 0;
         }
 
 
@@ -179,64 +182,56 @@ namespace ConnectToProfilerSDK
         {
             this.hardwareClient = skarlaki;
             this.fsuipcClient = fsuipc;
-            bool result = false;            // Return boolean for FSUIPC method calls
-            int dwFSReq = 0;             // Any version of FS is OK
-            int dwResult = -1;              // Variable to hold returned results
-            IPAddress localIP = GetLocalIPAddress();
 
 
-            Console.WriteLine("Press <ENTER> to connect to the SkalarkiIO Profiler");
-            Console.ReadLine();
-
-            try
-            {
-                hardwareClient.ConnectAsync().Wait();
-            }
-            catch(Exception e)
-            {
-                Console.WriteLine(e.Message);
-            }
+            bool result = false;        // Return boolean for FSUIPC method calls
+            int dwFSReq = 0;            // Any version of FS is OK
+            int dwResult = -1;          // Variable to hold returned results
 
             hardwareClient.ConnectionStateChanged += (s, a) =>
             {
-                Console.WriteLine("Client is now {0}", a.Connected ? "connected" : "not connected");
-                if (a.Connected == true)
-                {
-
+                if (a.Connected)
                     SetNextState(State.Off);
-                }
                 else
-                    SetNextState(State.Fault);
+                    SetNextState(State.Offline);
             };
 
-            hardwareClient.ConnectedDevicesChanged += (s, a) =>
+            
+            if(!hardwareClient.Connected())
             {
-                Console.WriteLine("Hardware {0} has {1}", a.Device, a.Connected ? "connected" : "disconnected");
-                var totalEvents = Switches.OVHD.All.Concat(Encoders.OVHD.All);
-                hardwareClient.RegisterEvents(totalEvents);
-            };
+                try
+                {
+                    hardwareClient.ConnectAsync().Wait();
+                }
+                catch(Exception e)
+                {
+                    Console.WriteLine("Skalarki.ConnectAsync(): " + e.Message);
+                    SetNextState(State.Offline);
+                }                
+            }
+            else
+            {
+                SetNextState(State.Off);
+            }
 
-            fsuipc.FSUIPC_Initialization();
-            result = fsuipc.FSUIPC_Open(dwFSReq, ref dwResult); //Ouverture de la connexion avec FSUIPC
-            while (!result)
+            if (currentState == State.Off)
+            {
+                fsuipc.FSUIPC_Initialization();
                 result = fsuipc.FSUIPC_Open(dwFSReq, ref dwResult);
+                // TODO put a time out, check the results (where;s the doc?)
+                // if not succes, otherwise state = FAULT
+                while (!result)
+                    result = fsuipc.FSUIPC_Open(dwFSReq, ref dwResult);
 
-            if (result)
-                Console.WriteLine("FSUIPC Connected");
-
-
-            // TODO if hardwareClient not connected, do something
-            // TODO if fsuipc not connected, try to perform connection
-            //      if fail --> state = FAULT
-            // TODO get aircraft's max fuel capacity
+                this.maxFuelCapacity = GetMaxFuelCapacity();
+                eventClient.RegisterEvents(Switches.OVHD.REFUEL.Concat(Encoders.OVHD.REFUEL));
+            }
 
             SetNextState(State.Off);
         }
 
         public void OnHardwareEvent(IOEvent hardwareEvent, object state)
         {
-            Console.WriteLine("Hardware event : " + hardwareEvent);
-
             // Filter (Group = Refuel) and (Source = Switch) and (Event = True)
             if ((hardwareEvent.Group == Group.REFUEL) && (hardwareEvent.Source == HardwareSource.Switch) && (hardwareEvent.ValueAsBool() == true))
             {
@@ -355,8 +350,8 @@ namespace ConnectToProfilerSDK
                     {
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false); // todo
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false); // todo
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, false);
                         break;
@@ -365,20 +360,20 @@ namespace ConnectToProfilerSDK
                     {
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, true);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false); // todo
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false); // todo
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
-                        this.preselectedFuel = GetActualFuel(fsuipcClient); // TODO get from FSUIPC
-                        this.actualFuel = GetActualFuel(fsuipcClient); // TODO get from FSUIPC
+                        this.preselectedFuel = GetActualFuel(fsuipcClient);
+                        this.actualFuel = GetActualFuel(fsuipcClient);
                         break;
                     }
                 case State.Refuelling:
                     {
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, true);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, true);  // todo
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false); // todo
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, true);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
                         break;
@@ -387,8 +382,8 @@ namespace ConnectToProfilerSDK
                     {
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, true);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false); // todo
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false); // todo
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
+                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, true);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
                         break;
@@ -417,11 +412,15 @@ namespace ConnectToProfilerSDK
         private void IncreasePreselectedFuel()
         {
             this.preselectedFuel += FUEL_STEP;
+            if(this.preselectedFuel > maxFuelCapacity)
+                this.preselectedFuel = maxFuelCapacity;
         }
 
         private void DecreasePreselectedFuel()
         {
             this.preselectedFuel -= FUEL_STEP;
+            if(this.preselectedFuel < 0)
+                this.preselectedFuel = 0;
         }
 
         private void DoRefuel()
@@ -439,7 +438,7 @@ namespace ConnectToProfilerSDK
                 timer.Dispose();
                 SetNextState(State.Finished);
             }
-            UpdateFSUIPC(fsuipcClient);
+            UpdateFSUIPC();
             UpdateLCD();
         }
 
@@ -465,6 +464,7 @@ namespace ConnectToProfilerSDK
             result = fsuipc.FSUIPC_Process(ref dwResult);
             result = fsuipc.FSUIPC_Get(ref token, ref dwResult);
             float zfw = dwResult / 256; //Conversion demandée par FSUIPC
+            Console.WriteLine("ZFW in lbs: " + zfw);
 
             dwResult = -1;
             token = -1;
@@ -473,11 +473,7 @@ namespace ConnectToProfilerSDK
 
             float fobKg = fob * 0.45359237f; //Conversion du FOB en KG
 
-            Console.WriteLine("FOB in Kgs: " + fobKg);
-
-            GetMaxFuelCapacity(fsuipc);
-
-            return fobKg/1000;
+            return fobKg / 1000;
         }
 
         private float GetMaxFuelCapacity(Fsuipc fsuipc)
@@ -517,25 +513,10 @@ namespace ConnectToProfilerSDK
 
         }
 
-        private void UpdateFSUIPC(Fsuipc fsuipc)
+        private void UpdateFSUIPC()
         {
-            bool result = false;            // Return boolean for FSUIPC method calls
-            int dwResult = -1;              // Variable to hold returned results
-            int token = -1;
-
-            //fsuipc.FSUIPC_Write();
-
-            //result = fsuipc.FSUIPC_Process(ref dwResult);
             // TODO send to FSUIPC the actual value
             // TODO if no connection --> stete = FAULT and (timer.dispose()!)
-        }
-
-        private static IPAddress GetLocalIPAddress()
-        {
-            return Dns.GetHostAddresses(
-                Dns.GetHostName())
-                .Where((ip) => ip.AddressFamily == AddressFamily.InterNetwork)
-                .FirstOrDefault();
         }
     }
 }
