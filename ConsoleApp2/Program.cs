@@ -11,7 +11,7 @@ namespace FAQU
 
     class Program
     {
-        static Fsuipc fsuipc = new Fsuipc();    // Our main fsuipc object!
+        static FSUIPCHandler fsuipcHandler;     // FSUIPC object
         static EventClient eventClient;         // Skalarki HW object
 
         private static IPAddress GetLocalIPAddress()
@@ -26,6 +26,7 @@ namespace FAQU
         {
             FAQUBrickRefuelling fAQU = new FAQUBrickRefuelling();
             IPAddress localIP = GetLocalIPAddress();
+            this.fsuipcHandler = new FSUIPCHandler();
 
             using (eventClient = new EventClient(localIP, 53000, (e, s) => { fAQU.OnHardwareEvent(e, s); }, null))
             {
@@ -34,7 +35,7 @@ namespace FAQU
                     Console.WriteLine("Hardware {0} has {1}", a.Device, a.Connected ? "connected" : "disconnected");
                 };
 
-                fAQU.Setup(eventClient, fsuipc);
+                fAQU.Setup(eventClient, fsuipcHandler);
 
                 Console.ReadLine();
                 eventClient.Disconnect();
@@ -45,19 +46,21 @@ namespace FAQU
     // To use this class : link OnHardwareEvent(), provide EventClient and Fsuipc objects through Setup();
     class FAQUBrickRefuelling
     {
-        private static float FUEL_STEP = 0.1f;
-        private static int TIMER_INTERVAL = 500;
+        private static float FUEL_STEP = 0.1f;      // [Kg x 1000]
+        private static int TIMER_INTERVAL = 500;    // [ms]
 
         private enum State { Offline, Off, Selection, Refuelling, Finished, Fault };
         private State currentState;
         private EventClient hardwareClient;
-        private Fsuipc fsuipcClient;
         private FSUIPCHandler fsuipcHandler;
         private Timer timer;
 
         private float preselectedFuel;
         private float actualFuel;
         private float maxFuelCapacity;
+        //
+        private float[] tanksCapacity;
+        private static int[] order = {FSUIPCHandler.TANK_CENTRE_ID, FSUIPCHandler.TANK_LEFT_MAIN_ID, FSUIPCHandler.TANK_RIGHT_MAIN_ID, FSUIPCHandler.TANK_LEFT_AUX_ID, FSUIPCHandler.TANK_RIGHT_AUX_ID, FSUIPCHandler.TANK_LEFT_TIP, FSUIPCHandler.TANK_RIGHT_TIP_ID};
 
         public FAQUBrickRefuelling()
         {
@@ -68,24 +71,18 @@ namespace FAQU
         }
 
 
-        public void Setup(EventClient skarlaki, Fsuipc fsuipc)
+        public void Setup(EventClient skarlaki, FSUIPCHandler fsuipc)
         {
             this.hardwareClient = skarlaki;
-            this.fsuipcClient = fsuipc;
-            this.fsuipcHandler = new FSUIPCHandler(this.fsuipcClient);
+            this.fsuipcHandler = fsuipc;
 
-            this.hardwareClient.ConnectionStateChanged += (s, a) =>
+            this.hardwareClient.ConnectionStateChanged += (s, skalarki) =>
             {
-                bool result;
-                int dwFSReq = 0;            // Any version of FS is OK
-                int dwResult = -1;          // Variable to hold returned results
-                if (a.Connected)
+                if (skalarki.Connected)
                 {
-                    if(this.currentState == State.Offline)
+                    if(!this.fsuipcHandler.IsConnected)
                     {
-                        this.fsuipcClient.FSUIPC_Initialization();
-
-                        result = this.fsuipcClient.FSUIPC_Open(dwFSReq, ref dwResult);
+                        result = this.fsuipcHandler.Connect();
                         if(result)
                         {
                             this.maxFuelCapacity = GetMaxFuelCapacity();
@@ -93,10 +90,7 @@ namespace FAQU
                             SetNextState(State.Off);
                         }
                         else
-                        {
-                            FSUIPCHandler.PrintErrorCode(dwResult);
                             SetNextState(State.Fault);
-                        }
                     }
                 }
                 else
@@ -285,8 +279,24 @@ namespace FAQU
             }
         }
 
+        private void IncreasePreselectedFuel()
+        {
+            this.preselectedFuel += FUEL_STEP;
+            if (this.preselectedFuel > maxFuelCapacity)
+                this.preselectedFuel = maxFuelCapacity;
+        }
+
+        private void DecreasePreselectedFuel()
+        {
+            this.preselectedFuel -= FUEL_STEP;
+            if (this.preselectedFuel < 0)
+                this.preselectedFuel = 0;
+        }
+
         private void StartRefuel()
         {
+            this.tanksCapacity = fsuipcHandler.GetTanksCapacity();
+
             timer = new Timer();
             timer.Interval = TIMER_INTERVAL;
 
@@ -303,39 +313,47 @@ namespace FAQU
             timer.Enabled = true;
         }
 
-        private void IncreasePreselectedFuel()
-        {
-            this.preselectedFuel += FUEL_STEP;
-            if (this.preselectedFuel > maxFuelCapacity)
-                this.preselectedFuel = maxFuelCapacity;
-        }
-
-        private void DecreasePreselectedFuel()
-        {
-            this.preselectedFuel -= FUEL_STEP;
-            if (this.preselectedFuel < 0)
-                this.preselectedFuel = 0;
-        }
-
         private void DoRefuel()
         {
-            UpdateFSUIPC();
-            // TODO: update this.actualFuel by calling GetTotalFuelLevel();
+            float[] levels = fsuipcHandler.GetTanksCurrentLevel();
+            // centre ; left main ; left aux ; left tip ; right main ; right aux ; right tip
+            //  0       1           2           3           4           5           6
+            int step = (this.preselectedFuel > this.actualFuel) ? FUEL_STEP : -FUEL_STEP;
 
-            if (this.preselectedFuel > this.actualFuel)
+            foreach(int idx in order)
             {
-                this.actualFuel += FUEL_STEP;
+
+                if(IsPossibleToRefuel(step, ref levels[i], tanksCapacity[i]))
+                {
+                    SetNewTankLevel(i, levels[i]);
+                    break;
+                }
             }
-            else if (this.preselectedFuel < this.actualFuel)
-            {
-                this.actualFuel -= FUEL_STEP;
-            }
-            else
+
+            this.actualFuel = fsuipcHandler.GetTotalFuelLevel();
+            if (this.actualFuel == this.preselectedFuel)
             {
                 timer.Dispose();
                 SetNextState(State.Finished);
             }
+
             UpdateLCD();
+        }
+
+        private bool IsPossibleToRefuel(float step, float level, float capacity)
+        {
+            float current = capacity * levels; // TODO maybe it's levels/100
+            if (levels != 1)                   // TODO either 1 or 100 ?
+            {
+                current = current + step;
+                if (current > capacity)
+                {
+                    current = capacity;
+                }
+                level = current / capacity;    // TODO * 100 ?
+                return true;
+            }
+            return false;
         }
 
         private float GetActualFuel()
@@ -371,7 +389,7 @@ namespace FAQU
 
         private float GetMaxFuelCapacity()
         {
-            //return FSUIPCHandler.GetTotalFuelCapacity(this.fsuipcClient);
+            //return FSUIPCHandler.GetTotalFuelCapacity();
 
 
             bool result = false;            // Return boolean for FSUIPC method calls
@@ -384,15 +402,15 @@ namespace FAQU
             Int32[] AddrTab = new Int32[7] { 0x0B78, 0x0B80, 0x0B88, 0x0B90, 0x0B98, 0x0BA0, 0x0BA8 }; //0 : centre, 1 : aile gauche, 4 : aile droite
             foreach (Int32 adr in AddrTab)
             {
-                result = this.fsuipcClient.FSUIPC_Read(adr, 4, ref token, ref dwResult); //Lecture du Zero Fuel Weight (masse de l'avion + chargement - fuel)
-                result = this.fsuipcClient.FSUIPC_Process(ref dwResult);
-                result = this.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
+                result = this.fsuipcHandler.fsuipcClient.FSUIPC_Read(adr, 4, ref token, ref dwResult); //Lecture du Zero Fuel Weight (masse de l'avion + chargement - fuel)
+                result = this.fsuipcHandler.fsuipcClient.FSUIPC_Process(ref dwResult);
+                result = this.fsuipcHandler.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
                 capacityUSGal += dwResult;
             }
 
-            result = this.fsuipcClient.FSUIPC_Read(0x0AF4, 4, ref token, ref dwResult); //Lecture de la masse volumique du carburant
-            result = this.fsuipcClient.FSUIPC_Process(ref dwResult);
-            result = this.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
+            result = this.fsuipcHandler.fsuipcClient.FSUIPC_Read(0x0AF4, 4, ref token, ref dwResult); //Lecture de la masse volumique du carburant
+            result = this.fsuipcHandler.fsuipcClient.FSUIPC_Process(ref dwResult);
+            result = this.fsuipcHandler.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
             dwResult /= 256; //opération requise par FSUIPC
 
             fuelweightLbsGal = dwResult;
@@ -407,49 +425,12 @@ namespace FAQU
             return capacityL;
         }
 
-        private void UpdateFSUIPC()
-        {
-            // TODO send to FSUIPC the actual value
-            // TODO if no connection --> stete = FAULT and (timer.dispose()!)
-
-            float[] levels = FSUIPCHandler.GetTanksCurrentLevel(fsuipcClient);
-            float[] capacities = FSUIPCHandler.GetTanksCapacity(fsuipcClient);
-
-            // centre ; left main ; left aux ; left tip ; right main ; right aux ; right tip
-            //  0       1           2           3           4           5           6
-            int[] order = {0, 1, 4, 2, 5, 3, 6};
-            foreach(int idx in order)
-            {
-                if(IsPossibleToRefuel(FUEL_STEP, ref levels[i], capacities[i]))
-                {
-                    SetNewTankLevel(fsuipcClient, i, levels[i]);
-                    break;
-                }
-            }
-        }
-
-        private bool IsPossibleToRefuel(float step, float level, float capacity)
-        {
-            float current = capacity * levels; // TODO maybe it's levels/100
-            if (levels != 1)                   // TODO either 1 or 100 ?
-            {
-                current = current + step;
-                if (current > capacity)
-                {
-                    current = capacity;
-                }
-                level = current / capacity;    // TODO * 100 ?
-                return true;
-            }
-            return false;
-        }
-
         public void TestToCarryOut()
         {
             // Comparing the two methods
 
-            float[] capacities = fsuipcHandler.GetTanksCapacity(this.fsuipcClient);
-            float[] levels = fsuipcHandler.GetTanksCurrentLevel(this.fsuipcClient);
+            float[] capacities = fsuipcHandler.GetTanksCapacity();
+            float[] levels = fsuipcHandler.GetTanksCurrentLevel();
 
             float current = 0;
             float capacity = 0;
@@ -464,7 +445,7 @@ namespace FAQU
 
             Console.WriteLine(">> Comparing the methods")
             Console.WriteLine(" float GetActualFuel() : {0} in Kg x 1000", quentinActual);
-            Console.WriteLine(" float[] Individually  : {0} in Kg x 1000", total;
+            Console.WriteLine(" float[] Individually  : {0} in Kg x 1000", total);
             Console.WriteLine(".");
             Console.WriteLine(" float GetMaxFuelCapacity() : {0} in liters?", quentinMax);
             Console.WriteLine(" float GetTanksCapacity()   : {0} in Kg x 1000", capacity);
@@ -473,25 +454,30 @@ namespace FAQU
 
     class FSUIPCHandler
     {
-        public fsuipc fsuipcClient;
+        public Fsuipc fsuipcClient;
         private bool isConnected;
-
         //
         private bool result;         // Return boolean for FSUIPC method calls
         private int dwResult = -1;   // Variable to hold returned results
         private int token = -1;
         private byte[] buffer = new byte[255];
         //
-        private static readonly Int32[] AddrTabTotalFuelCapacity = new Int32[7] { 0x0B78, 0x0B80, 0x0B88, 0x0B90, 0x0B98, 0x0BA0, 0x0BA8 }; // centre ; left main ; left aux ; left tip ; right main ; right aux ; right tip
-
-        private static readonly Int32[] AddrTabCurrentFuelLevels = new Int32[7] { 0x0B74, 0x0B7C, 0x0B84, 0x0B8C, 0x0B94, 0x0B9C, 0x0BA4 }; // centre ; left main ; left aux ; left tip ; right main ; right aux ; right tip
-
+         // centre ; left main ; left aux ; left tip ; right main ; right aux ; right tip
+        private static readonly Int32[] AddrTabTotalFuelCapacity = new Int32[7] { 0x0B78, 0x0B80, 0x0B88, 0x0B90, 0x0B98, 0x0BA0, 0x0BA8 };
+        private static readonly Int32[] AddrTabCurrentFuelLevels = new Int32[7] { 0x0B74, 0x0B7C, 0x0B84, 0x0B8C, 0x0B94, 0x0B9C, 0x0BA4 };
+        public static readonly int TANK_CENTRE_ID = 0;
+        public static readonly int TANK_LEFT_MAIN_ID = 1;
+        public static readonly int TANK_LEFT_AUX_ID = 2;
+        public static readonly int TANK_LEFT_TIP = 3;
+        public static readonly int TANK_RIGHT_MAIN_ID = 4;
+        public static readonly int TANK_RIGHT_AUX_ID = 5;
+        public static readonly int TANK_RIGHT_TIP_ID = 6;
+        //
         // TODO: add exceptions for results = false
-        // TODO: encapsulate fsuipcClient here
 
-        public FSUIPCHandler(fsuipc fsuipcClient)
+        public FSUIPCHandler()
         {
-            this.fsuipcClient = fsuipcClient;
+            this.fsuipcClient = new Fsuipc();
             this.isConnected = false;
         }
 
@@ -503,7 +489,13 @@ namespace FAQU
 
         public bool Connect()
         {
-            // TODO
+            result = this.fsuipcClient.FSUIPC_Initialization();
+            result &= this.fsuipcClient.FSUIPC_Open(dwFSReq, ref dwResult);
+
+            if(!result)
+                PrintErrorCode(dwResult);
+
+            return result;
         }
 
         public float[] GetTanksCapacity()
@@ -578,7 +570,6 @@ namespace FAQU
 
             return tanks;
         }
-
 
         public float GetTotalFuelCapacity()
         {
