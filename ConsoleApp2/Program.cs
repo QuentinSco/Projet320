@@ -51,6 +51,13 @@ namespace FAQU
         private static int TIMER_INTERVAL = 500;    // [ms]
 
         private enum State { Offline, Off, Selection, Refuelling, Finished, Fault };
+        // Offline    : No Skalarki (hardware) connection
+        // Off        : Refuelling off
+        // Selection  : Choosing fuel quantity
+        // Refuelling : well... refuelling
+        // Finished   : I've chosed the best words to describe the states
+        // Fault      : Important! Skalarki is connected, but no FSUIPC (software) connection
+
         private State currentState;
         private EventClient hardwareClient;
         private FSUIPCHandler fsuipcHandler;
@@ -62,7 +69,18 @@ namespace FAQU
         private float maxFuelCapacity;
         //
         private float[] tanksCapacity;
-        private static int[] order = {FSUIPCHandler.TANK_CENTRE_ID, FSUIPCHandler.TANK_LEFT_MAIN_ID, FSUIPCHandler.TANK_RIGHT_MAIN_ID, FSUIPCHandler.TANK_LEFT_AUX_ID, FSUIPCHandler.TANK_RIGHT_AUX_ID, FSUIPCHandler.TANK_LEFT_TIP, FSUIPCHandler.TANK_RIGHT_TIP_ID};
+        private static int[] order = {
+            FSUIPCHandler.TANK_LEFT_TIP_ID,
+            FSUIPCHandler.TANK_RIGHT_TIP_ID,
+
+            FSUIPCHandler.TANK_LEFT_MAIN_ID,
+            FSUIPCHandler.TANK_RIGHT_MAIN_ID,
+
+            FSUIPCHandler.TANK_LEFT_AUX_ID,
+            FSUIPCHandler.TANK_RIGHT_AUX_ID,
+
+            FSUIPCHandler.TANK_CENTRE_ID
+            };
 
         public FAQUBrickRefuelling()
         {
@@ -82,21 +100,7 @@ namespace FAQU
             this.hardwareClient.ConnectionStateChanged += (s, skalarki) =>
             {
                 if (skalarki.Connected)
-                {
-                    if(!this.fsuipcHandler.IsConnected)
-                    {
-                        result = this.fsuipcHandler.Connect();
-                        if(result)
-                        {
-                            TestToCarryOut();
-                            this.maxFuelCapacity = GetMaxFuelCapacity();
-                            this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
-                            SetNextState(State.Off);
-                        }
-                        else
-                            SetNextState(State.Fault);
-                    }
-                }
+                    ConnectToFSUIPC();
                 else
                     SetNextState(State.Offline);
             };
@@ -109,6 +113,23 @@ namespace FAQU
             {
                 Console.WriteLine("Skalarki.ConnectAsync(): " + e.Message);
                 SetNextState(State.Offline);
+            }
+        }
+
+        private void ConnectToFSUIPC()
+        {
+            if(!this.fsuipcHandler.IsConnected)
+            {
+                result = this.fsuipcHandler.Connect();
+                if(result)
+                {
+                    TestToCarryOut();
+                    this.maxFuelCapacity = GetMaxFuelCapacity();
+                    this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
+                    SetNextState(State.Off);
+                }
+                else
+                    SetNextState(State.Fault);
             }
         }
 
@@ -161,11 +182,13 @@ namespace FAQU
                             {
                                 case Event.POWER:
                                     {
+                                        timer.Dispose();
                                         SetNextState(State.Off);
                                         break;
                                     }
                                 case Event.REFUELING:
                                     {
+                                        timer.Dispose();
                                         SetNextState(State.Selection);
                                         break;
                                     }
@@ -186,7 +209,14 @@ namespace FAQU
                         }
                     case State.Fault:
                         {
-                            // TODO
+                            switch (hardwareEvent.Event)
+                            {
+                                case Event.POWER:
+                                    {
+                                        ConnectToFSUIPC();
+                                        break;
+                                    }
+                            }
                             break;
                         }
                 }
@@ -336,7 +366,7 @@ namespace FAQU
             }
 
             this.actualFuel = fsuipcHandler.GetTotalFuelLevel();
-            if (this.actualFuel == this.preselectedFuel)
+            if ((this.actualFuel >= this.preselectedFuel) && (this.actualFuel <= this.preselectedFuel + FUEL_STEP))
             {
                 timer.Dispose();
                 SetNextState(State.Finished);
@@ -483,7 +513,7 @@ namespace FAQU
         public static readonly int TANK_CENTRE_ID = 0;
         public static readonly int TANK_LEFT_MAIN_ID = 1;
         public static readonly int TANK_LEFT_AUX_ID = 2;
-        public static readonly int TANK_LEFT_TIP = 3;
+        public static readonly int TANK_LEFT_TIP_ID = 3;
         public static readonly int TANK_RIGHT_MAIN_ID = 4;
         public static readonly int TANK_RIGHT_AUX_ID = 5;
         public static readonly int TANK_RIGHT_TIP_ID = 6;
@@ -667,76 +697,57 @@ namespace FAQU
 
                 case Fsuipc.FSUIPC_ERR_OK:
                     return code + " = FSUIPC_ERR_OK";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_OPEN:
                     return code + " = FSUIPC_ERR_OPEN";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_NOFS:
                     return code + " = FSUIPC_ERR_NOFS";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_REGMSG:
                     return code + " = FSUIPC_ERR_REGMSG";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_ATOM:
                     return code + " = FSUIPC_ERR_ATOM";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_MAP:
                     return code + " = FSUIPC_ERR_MAP";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_VIEW:
                     return code + " = FSUIPC_ERR_VIEW";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_VERSION:
                     return code + " = FSUIPC_ERR_VERSION";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_WRONGFS:
                     return code + " = FSUIPC_ERR_WRONGFS";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_NOTOPEN:
                     return code + " = FSUIPC_ERR_NOTOPEN";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_NODATA:
                     return code + " = FSUIPC_ERR_NODATA";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_TIMEOUT:
                     return code + " = FSUIPC_ERR_TIMEOUT";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_SENDMSG:
                     return code + " = FSUIPC_ERR_SENDMSG";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_DATA:
                     return code + " = FSUIPC_ERR_DATA";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_RUNNING:
                     return code + " = FSUIPC_ERR_RUNNING";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_SIZE:
                     return code + " = FSUIPC_ERR_SIZE";
-                    break;
 
                 case Fsuipc.FSUIPC_ERR_BUFOVERFLOW:
                     return code + " = FSUIPC_ERR_BUFOVERFLOW";
-                    break;
 
                 default:
                     return code.ToString();
-                    break;
-
             }
         }
     }
