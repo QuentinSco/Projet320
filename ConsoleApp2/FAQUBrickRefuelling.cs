@@ -3,12 +3,9 @@ namespace FAQU
 {
     using System;
     using System.Linq;
-    using System.Net;
-    using System.Net.Sockets;
     using SkalarkiIO.SDK;
     using System.Timers;
     using FsuipcSdk;
-    using System.Collections.Generic;
 
     // To use this class : link OnHardwareEvent(), provide EventClient and Fsuipc objects through Setup();
     class FAQUBrickRefuelling
@@ -335,6 +332,22 @@ namespace FAQU
             if ((this.actualFuel >= this.preselectedFuel) && (this.actualFuel <= this.preselectedFuel + FUEL_LOAD_STEP))
             {
                 timer.Dispose();
+                // FUEL BALANCE
+                float[] levels = fsuipcHandler.GetTanksCurrentLevel();
+                float aux;
+                // MAIN
+                aux = levels[FSUIPCHandler.TANK_LEFT_MAIN_ID] + levels[FSUIPCHandler.TANK_RIGHT_MAIN_ID];
+                fsuipcHandler.SetNewTankLevel(FSUIPCHandler.TANK_LEFT_MAIN_ID, aux/2);
+                fsuipcHandler.SetNewTankLevel(FSUIPCHandler.TANK_RIGHT_MAIN_ID, aux/2);
+                // TIP
+                aux = levels[FSUIPCHandler.TANK_LEFT_TIP_ID] + levels[FSUIPCHandler.TANK_RIGHT_TIP_ID];
+                fsuipcHandler.SetNewTankLevel(FSUIPCHandler.TANK_LEFT_TIP_ID, aux/2);
+                fsuipcHandler.SetNewTankLevel(FSUIPCHandler.TANK_RIGHT_TIP_ID, aux/2);
+                // AUX
+                aux = levels[FSUIPCHandler.TANK_LEFT_AUX_ID] + levels[FSUIPCHandler.TANK_RIGHT_AUX_ID];
+                fsuipcHandler.SetNewTankLevel(FSUIPCHandler.TANK_LEFT_AUX_ID, aux/2);
+                fsuipcHandler.SetNewTankLevel(FSUIPCHandler.TANK_RIGHT_AUX_ID, aux/2);
+                //
                 SetNextState(State.Finished);
             }
 
