@@ -95,7 +95,6 @@ namespace FAQU
         {
             this.hardwareClient = skarlaki;
             this.fsuipcHandler = fsuipc;
-            bool result = false;
 
             this.hardwareClient.ConnectionStateChanged += (s, skalarki) =>
             {
@@ -118,6 +117,7 @@ namespace FAQU
 
         private void ConnectToFSUIPC()
         {
+            bool result = false;
             if(!this.fsuipcHandler.IsConnected)
             {
                 result = this.fsuipcHandler.Connect();
