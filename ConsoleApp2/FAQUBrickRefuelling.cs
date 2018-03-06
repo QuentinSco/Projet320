@@ -345,7 +345,7 @@ namespace FAQU
         {
             //Console.WriteLine("Check level={0} cap¨={1}", level, capacity);
             float current = capacity * level;
-            if (level != 1 && capacity != 0)
+            if (((level != 1 && step>0) || (level !=0 && step<0)) && capacity != 0)
             {
                 current = current + step;
                 if (current > capacity)
