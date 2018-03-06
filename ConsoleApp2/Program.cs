@@ -6,9 +6,6 @@ namespace FAQU
     using System.Net;
     using System.Net.Sockets;
     using SkalarkiIO.SDK;
-    using System.Timers;
-    using FsuipcSdk;
-    using System.Collections.Generic;
 
     class Program
     {
