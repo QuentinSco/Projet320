@@ -47,8 +47,8 @@ namespace FAQU
     // To use this class : link OnHardwareEvent(), provide EventClient and Fsuipc objects through Setup();
     class FAQUBrickRefuelling
     {
-        private static float FUEL_STEP = 0.1f;      // [Kg x 1000]
-        private static int TIMER_INTERVAL = 500;    // [ms]
+        private static float FUEL_STEP = 0.05f;      // [Kg x 1000]
+        private static int TIMER_INTERVAL = 250;    // [ms]
 
         private enum State { Offline, Off, Selection, Refuelling, Finished, Fault };
         // Offline    : No Skalarki (hardware) connection
@@ -123,7 +123,7 @@ namespace FAQU
                 result = this.fsuipcHandler.Connect();
                 if(result)
                 {
-                    TestToCarryOut();
+                    // TestToCarryOut();
                     this.maxFuelCapacity = GetMaxFuelCapacity();
                     this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
                     SetNextState(State.Off);
@@ -315,14 +315,14 @@ namespace FAQU
 
         private void IncreasePreselectedFuel()
         {
-            this.preselectedFuel += FUEL_STEP;
+            this.preselectedFuel += 2 * FUEL_STEP;
             if (this.preselectedFuel > maxFuelCapacity)
                 this.preselectedFuel = maxFuelCapacity;
         }
 
         private void DecreasePreselectedFuel()
         {
-            this.preselectedFuel -= FUEL_STEP;
+            this.preselectedFuel -= 2 * FUEL_STEP;
             if (this.preselectedFuel < 0)
                 this.preselectedFuel = 0;
         }
@@ -374,8 +374,6 @@ namespace FAQU
 
             UpdateLCD();
         }
-
-      
 
         private bool IsPossibleToRefuel(float step, ref float level, float capacity)
         {
