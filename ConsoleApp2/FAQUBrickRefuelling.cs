@@ -333,7 +333,7 @@ namespace FAQU
             {
                 timer.Dispose();
                 // FUEL BALANCE
-                float[] levels = fsuipcHandler.GetTanksCurrentLevel();
+                levels = fsuipcHandler.GetTanksCurrentLevel();
                 float aux;
                 // MAIN
                 aux = levels[FSUIPCHandler.TANK_LEFT_MAIN_ID] + levels[FSUIPCHandler.TANK_RIGHT_MAIN_ID];
