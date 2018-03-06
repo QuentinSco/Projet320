@@ -47,8 +47,9 @@ namespace FAQU
     // To use this class : link OnHardwareEvent(), provide EventClient and Fsuipc objects through Setup();
     class FAQUBrickRefuelling
     {
-        private static float FUEL_STEP = 0.05f;      // [Kg x 1000]
-        private static int TIMER_INTERVAL = 250;    // [ms]
+        private static float FUEL_SLCT_STEP = 0.10f;    // [Kg x 1000]
+        private static float FUEL_LOAD_STEP = 0.01f;    // [Kg x 1000]
+        private static int TIMER_INTERVAL = 250;        // [ms]
 
         private enum State { Offline, Off, Selection, Refuelling, Finished, Fault };
         // Offline    : No Skalarki (hardware) connection
@@ -124,9 +125,10 @@ namespace FAQU
                 if(result)
                 {
                     // TestToCarryOut();
-                    this.maxFuelCapacity = GetMaxFuelCapacity();
+                    this.maxFuelCapacity = fsuipcHandler.GetTotalFuelCapacity();
                     this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
                     SetNextState(State.Off);
+                    UpdateLCD();
                 }
                 else
                     SetNextState(State.Fault);
@@ -170,7 +172,6 @@ namespace FAQU
                                 case Event.REFUELING:
                                     {
                                         SetNextState(State.Refuelling);
-                                        StartRefuel();
                                         break;
                                     }
                             }
@@ -288,6 +289,7 @@ namespace FAQU
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
+                        StartRefuel();
                         break;
                     }
                 case State.Finished:
@@ -315,14 +317,14 @@ namespace FAQU
 
         private void IncreasePreselectedFuel()
         {
-            this.preselectedFuel += 2 * FUEL_STEP;
+            this.preselectedFuel += FUEL_SLCT_STEP;
             if (this.preselectedFuel > maxFuelCapacity)
                 this.preselectedFuel = maxFuelCapacity;
         }
 
         private void DecreasePreselectedFuel()
         {
-            this.preselectedFuel -= 2 * FUEL_STEP;
+            this.preselectedFuel -= FUEL_SLCT_STEP;
             if (this.preselectedFuel < 0)
                 this.preselectedFuel = 0;
         }
@@ -352,25 +354,28 @@ namespace FAQU
             float[] levels = fsuipcHandler.GetTanksCurrentLevel();
             // centre ; left main ; left aux ; left tip ; right main ; right aux ; right tip
             //  0       1           2           3           4           5           6
-            float step = (this.preselectedFuel > this.actualFuel) ? FUEL_STEP : -FUEL_STEP;
+            float step = (this.preselectedFuel > this.actualFuel) ? FUEL_LOAD_STEP : -FUEL_LOAD_STEP;
 
             foreach(int idx in order)
             {
-                float qncien = levels[idx];
                 if (IsPossibleToRefuel(step, ref levels[idx], tanksCapacity[idx]))
                 {
-                    Console.WriteLine("DO FUEL i={2}: old={0}; new={1}", qncien, levels[idx], idx);
                     fsuipcHandler.SetNewTankLevel(idx, levels[idx]);
                     break;
                 }
             }
 
             this.actualFuel = fsuipcHandler.GetTotalFuelLevel();
-            if ((this.actualFuel >= this.preselectedFuel) && (this.actualFuel <= this.preselectedFuel + FUEL_STEP))
+            if ((this.actualFuel >= this.preselectedFuel) && (this.actualFuel <= this.preselectedFuel + FUEL_LOAD_STEP))
             {
                 timer.Dispose();
                 SetNextState(State.Finished);
             }
+
+            float theGetActualFuel = GetActualFuel();
+            Console.WriteLine("GetActualFuel()={0}", theGetActualFuel);
+            Console.WriteLine("fsuipcHandler()={0}", this.actualFuel);
+            Console.WriteLine(".");
 
             UpdateLCD();
         }
