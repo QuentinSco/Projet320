@@ -8,6 +8,7 @@ namespace FAQU
     using SkalarkiIO.SDK;
     using System.Timers;
     using FsuipcSdk;
+    using System.Collections.Generic;
 
     class Program
     {
@@ -87,6 +88,7 @@ namespace FAQU
                         result = this.fsuipcHandler.Connect();
                         if(result)
                         {
+                            TestToCarryOut();
                             this.maxFuelCapacity = GetMaxFuelCapacity();
                             this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
                             SetNextState(State.Off);
@@ -324,10 +326,11 @@ namespace FAQU
 
             foreach(int idx in order)
             {
-
-                if(IsPossibleToRefuel(step, levels[idx], tanksCapacity[idx]))
+                float qncien = levels[idx];
+                if (IsPossibleToRefuel(step, ref levels[idx], tanksCapacity[idx]))
                 {
-                    //SetNewTankLevel(i, levels[i]);
+                    Console.WriteLine("DO FUEL i={2}: old={0}; new={1}", qncien, levels[idx], idx);
+                    fsuipcHandler.SetNewTankLevel(idx, levels[idx]);
                     break;
                 }
             }
@@ -342,17 +345,21 @@ namespace FAQU
             UpdateLCD();
         }
 
-        private bool IsPossibleToRefuel(float step, float level, float capacity)
+      
+
+        private bool IsPossibleToRefuel(float step, ref float level, float capacity)
         {
-            float current = capacity * level; // TODO maybe it's levels/100
-            if (level != 1)                   // TODO either 1 or 100 ?
+            //Console.WriteLine("Check level={0} cap¨={1}", level, capacity);
+            float current = capacity * level;
+            if (level != 1 && capacity != 0)
             {
                 current = current + step;
                 if (current > capacity)
                 {
                     current = capacity;
                 }
-                level = current / capacity;    // TODO * 100 ?
+                level = current / capacity;
+                //Console.WriteLine("  OUIIIIII¨new level={0}", level);
                 return true;
             }
             return false;
@@ -410,19 +417,23 @@ namespace FAQU
                 capacityUSGal += dwResult;
             }
 
-            result = this.fsuipcHandler.fsuipcClient.FSUIPC_Read(0x0AF4, 4, ref token, ref dwResult); //Lecture de la masse volumique du carburant
+            result = this.fsuipcHandler.fsuipcClient.FSUIPC_Read(0x0AF4, 2, ref token, ref dwResult); //Lecture de la masse volumique du carburant
             result = this.fsuipcHandler.fsuipcClient.FSUIPC_Process(ref dwResult);
             result = this.fsuipcHandler.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
-            dwResult /= 256; //opération requise par FSUIPC
+            fuelweightLbsGal = dwResult/256f; //Division demandée par FSUIPC
 
-            fuelweightLbsGal = dwResult;
-
-            fuelweightKgL = 0.1198264f * fuelweightLbsGal;
+            fuelweightKgL = 0.119826f * fuelweightLbsGal;
 
             capacityL = 3.78541f * capacityUSGal;
 
             Console.WriteLine("max capacity en UsGal : " + capacityUSGal);
+            Console.WriteLine("max capacity en L : " + capacityL);
+            Console.WriteLine("fuel weight en Lbs/USGal : " + fuelweightLbsGal);
+            Console.WriteLine("fuel weight en KG/L : " + fuelweightKgL);
             Console.WriteLine("max capacity en Kg : " + (fuelweightKgL * capacityL));
+            Console.WriteLine("max capacity en Lbs : " + (fuelweightLbsGal * capacityUSGal));
+
+            Console.WriteLine("-----------------");
 
             return capacityL;
         }
@@ -433,12 +444,14 @@ namespace FAQU
 
             float[] capacities = fsuipcHandler.GetTanksCapacity();
             float[] levels = fsuipcHandler.GetTanksCurrentLevel();
+            //Console.WriteLine(levels[0].ToString());
 
             float current = 0;
             float capacity = 0;
             for(int i=0; i<7; i++)
-            {
-                current = current + (capacities[i] * levels[i]); // TODO: maybe it's level/100
+            {             
+                Console.WriteLine("[{0}] cap={1} level={2}", i, capacities[i], levels[i]);
+                current = current + (capacities[i] * levels[i]);
                 capacity = capacity + capacities[i];
             }
 
@@ -447,7 +460,7 @@ namespace FAQU
 
             Console.WriteLine(">> Comparing the methods");
             Console.WriteLine(" float GetActualFuel() : {0} in Kg x 1000", quentinActual);
-            //Console.WriteLine(" float[] Individually  : {0} in Kg x 1000", total);
+            Console.WriteLine(" float[] Individually  : {0} in Kg x 1000", current);
             Console.WriteLine(".");
             Console.WriteLine(" float GetMaxFuelCapacity() : {0} in liters?", quentinMax);
             Console.WriteLine(" float GetTanksCapacity()   : {0} in Kg x 1000", capacity);
@@ -466,7 +479,7 @@ namespace FAQU
         //
          // centre ; left main ; left aux ; left tip ; right main ; right aux ; right tip
         private static readonly Int32[] AddrTabTotalFuelCapacity = new Int32[7] { 0x0B78, 0x0B80, 0x0B88, 0x0B90, 0x0B98, 0x0BA0, 0x0BA8 };
-        private static readonly Int32[] AddrTabCurrentFuelLevels = new Int32[7] { 0x0B74, 0x0B7C, 0x0B84, 0x0B8C, 0x0B94, 0x0B9C, 0x0BA4 };
+        public static readonly Int32[] AddrTabCurrentFuelLevels = new Int32[7] { 0x0B74, 0x0B7C, 0x0B84, 0x0B8C, 0x0B94, 0x0B9C, 0x0BA4 };
         public static readonly int TANK_CENTRE_ID = 0;
         public static readonly int TANK_LEFT_MAIN_ID = 1;
         public static readonly int TANK_LEFT_AUX_ID = 2;
@@ -531,7 +544,7 @@ namespace FAQU
                 result &= this.fsuipcClient.FSUIPC_Process(ref dwResult);
                 result &= this.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
 
-                if(result)
+                if (result)
                 {
                     // Convert from US Gallons to Pounds then to Kg then to 1000xKg
                     // 1000 x Kg = [gal] * [lbs/gal] * [kg/lbs] / []
@@ -542,6 +555,8 @@ namespace FAQU
                     tanks[i] = 0;
                     PrintErrorCode(dwResult);
                 }
+                
+                i++;
             }
 
             return tanks;
@@ -557,6 +572,7 @@ namespace FAQU
 
             foreach (Int32 adr in AddrTabCurrentFuelLevels)
             {
+
                 result = this.fsuipcClient.FSUIPC_Read(adr, 4, ref token, ref dwResult);
                 result &= this.fsuipcClient.FSUIPC_Process(ref dwResult);
                 result &= this.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
@@ -564,12 +580,15 @@ namespace FAQU
                 if(result)
                 {
                     tanks[i] = dwResult / 128.0f / 65536.0f;
+                    //tanks.Add(dwResult / 128.0f / 65536.0f);
                 }
                 else
                 {
                     tanks[i] = 0;
+                    //tanks.Add(0);
                     PrintErrorCode(dwResult);
                 }
+                i++;
             }
 
             return tanks;
@@ -627,8 +646,9 @@ namespace FAQU
         public void SetNewTankLevel(int tank_id, float level)
         {
             level = level * 128 * 65536;
-            result = this.fsuipcClient.FSUIPC_Write(AddrTabCurrentFuelLevels[tank_id], (byte)level,ref token, ref dwResult);
-            result &= this.fsuipcClient.FSUIPC_Process(ref dwResult);
+                
+            result = fsuipcClient.FSUIPC_Write(AddrTabCurrentFuelLevels[tank_id], (int)level, ref token, ref dwResult);
+            result &= fsuipcClient.FSUIPC_Process(ref dwResult);
 
             if(!result)
                 PrintErrorCode(dwResult);
