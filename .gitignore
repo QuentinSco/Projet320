@@ -1,2 +1,9 @@
 
 .DS_Store
+.vs/PrototypeRefuel/v15/.suo
+.vs/PrototypeRefuel/v15/.suo
+.vs/PrototypeRefuel/v15/Server/sqlite3/storage.ide
+.vs/PrototypeRefuel/v15/Server/sqlite3/storage.ide-shm
+*.ide-wal
+*.ide-shm
+*.ide
