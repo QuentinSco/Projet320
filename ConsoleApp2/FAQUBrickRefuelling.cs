@@ -94,8 +94,10 @@ namespace FAQU
                 }
                 else
                     SetNextState(State.Fault);
-                UpdateLCD();
             }
+            else
+                SetNextState(State.Off);
+            UpdateLCD();
         }
 
         public void OnHardwareEvent(IOEvent hardwareEvent, object state)
