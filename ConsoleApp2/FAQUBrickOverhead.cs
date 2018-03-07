@@ -53,21 +53,20 @@ namespace FAQU
         private void ConnectToFSUIPC()
         {
             bool result = false;
-            if(!this.fsuipcHandler.IsConnected)
+            if (!this.fsuipcHandler.IsConnected)
             {
                 result = this.fsuipcHandler.Connect();
-                if(result)
+                if (result)
                 {
                     // TestToCarryOut();
-                    this.maxFuelCapacity = fsuipcHandler.GetTotalFuelCapacity();
                     this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
-                    SetNextState(State.Off);
+                    SetNextState(State.Offline);
                 }
                 else
                     SetNextState(State.Fault);
             }
             else
-                SetNextState(State.Off);
+                SetNextState(State.Offline);
             UpdateLCD();
         }
 
@@ -80,9 +79,9 @@ namespace FAQU
                 case State.Running:
                     {
                         // TODO: all the work
-                        if((hardwareEvent.Group == Group.LIGHT) && (HardwareSource.Source == HardwareSource.Switch))
+                        if ((hardwareEvent.Group == Group.LIGHT) && (hardwareEvent.Source == HardwareSource.Switch))
                         {
-                            switch(hardwareEvent.Event)
+                            switch (hardwareEvent.Event)
                             {
                                 // Skalarki    FSUIPC
                                 // NAVLOGO      NAVLOGO
@@ -98,53 +97,69 @@ namespace FAQU
                                 // --           Cabin
 
                                 case Event.BEACONLIGHTSOFF:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.BEACONLIGHTSON:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.LEFTLANDINGLIGHTON:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.LEFTLANDINGLIGHTRETRACTED:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.RIGHTLANDINGLIGHTON:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.RIGHTLANDINGLIGHTRETRACTED:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.NAVLOGOLIGHTSOFF:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.NAVLOGOLIGHTSON:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.NOSELIGHTOFF:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.NOSELIGHTTO:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.RWYLIGHTSOFF:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.RWYLIGHTSON:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.STROBESLIGHTSOFF:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.STROBESLIGHTSON:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.WINGLIGHTSOFF:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                                 case Event.WINGLIGHTSON:
-                                {
-                                }
+                                    {
+                                        break;
+                                    }
                             }
                         }
                         UpdateLCD();
@@ -155,13 +170,14 @@ namespace FAQU
                         ConnectToFSUIPC();
                         break;
                     }
+
             }
 
 
             // Filter (Group = Refuel) and (Source = Switch) and (Event = True)
             if ((hardwareEvent.Group == Group.REFUEL) && (hardwareEvent.Source == HardwareSource.Switch) && (hardwareEvent.ValueAsBool() == true))
             {
-                
+
             }
         }
 
@@ -169,7 +185,7 @@ namespace FAQU
         {
             switch (currentState)
             {
-                case State.Off:
+                case State.Offline:
                     {
                         hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "   ");
                         hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "   ");
@@ -199,8 +215,6 @@ namespace FAQU
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
                         hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
-                        this.preselectedFuel = fsuipcHandler.GetTotalFuelLevel();
-                        this.actualFuel = fsuipcHandler.GetTotalFuelLevel();
                         break;
                     }
                 case State.Fault:
