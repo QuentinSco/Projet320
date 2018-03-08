@@ -23,17 +23,25 @@ namespace FAQU
         static void Main(string[] args)
         {
             FAQUBrickRefuelling fAQU = new FAQUBrickRefuelling();
+            FAQUBrickOverhead faqu_overhead = new FAQUBrickOverhead();
+
             IPAddress localIP = GetLocalIPAddress();
             fsuipcHandler = new FSUIPCHandler();
 
-            using (eventClient = new EventClient(localIP, 53000, (e, s) => { fAQU.OnHardwareEvent(e, s); }, null))
+            using (eventClient = new EventClient(localIP, 53000, (e, s) => {
+                fAQU.OnHardwareEvent(e, s);
+                faqu_overhead.OnHardwareEvent(e, s);
+            }, null))
             {
                 eventClient.ConnectedDevicesChanged += (s, a) =>
                 {
                     Console.WriteLine("Hardware {0} has {1}", a.Device, a.Connected ? "connected" : "disconnected");
                 };
 
+                faqu_overhead.Setup(eventClient, fsuipcHandler);
                 fAQU.Setup(eventClient, fsuipcHandler);
+
+                eventClient.ConnectAsync().Wait();
 
                 Console.ReadLine();
                 eventClient.Disconnect();

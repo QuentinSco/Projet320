@@ -25,7 +25,6 @@ namespace FAQU
         private State currentState;
         private EventClient hardwareClient;
         private FSUIPCHandler fsuipcHandler;
-        private Fsuipc fsuipcClient = new Fsuipc();
         private Timer timer;
 
         private float preselectedFuel;
@@ -68,15 +67,15 @@ namespace FAQU
                     SetNextState(State.Offline);
             };
 
-            try
+            /*try
             {
                 hardwareClient.ConnectAsync().Wait();
             }
             catch (Exception e)
             {
-                Console.WriteLine("Skalarki.ConnectAsync(): " + e.Message);
+                Console.WriteLine("REFUEL Skalarki.ConnectAsync(): " + e.Message);
                 SetNextState(State.Offline);
-            }
+            }*/
         }
 
         private void ConnectToFSUIPC()

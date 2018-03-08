@@ -18,7 +18,6 @@ namespace FAQU
         private State currentState;
         private EventClient hardwareClient;
         private FSUIPCHandler fsuipcHandler;
-        private Fsuipc fsuipcClient = new Fsuipc();
         //
         private bool landing_left_light = false;
         private bool landing_right_light = false;
@@ -41,15 +40,15 @@ namespace FAQU
                     SetNextState(State.Offline);
             };
 
-            try
+            /*try
             {
                 hardwareClient.ConnectAsync().Wait();
             }
             catch (Exception e)
             {
-                Console.WriteLine("Skalarki.ConnectAsync(): " + e.Message);
+                Console.WriteLine("OVDH Skalarki.ConnectAsync(): " + e.Message);
                 SetNextState(State.Offline);
-            }
+            }*/
         }
 
         private void ConnectToFSUIPC()
@@ -61,25 +60,49 @@ namespace FAQU
                 if (result)
                 {
                     this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
-                    SetNextState(State.Offline);
+                    SetNextState(State.Running);
                 }
                 else
                     SetNextState(State.Fault);
             }
             else
-                SetNextState(State.Offline);
+                SetNextState(State.Running);
             UpdateLCD();
         }
 
         public void OnHardwareEvent(IOEvent hardwareEvent, object state)
         {
             bool event_value = hardwareEvent.ValueAsBool();
-
+            
             switch (currentState)
             {
                 case State.Running:
                     {
-                        if ((hardwareEvent.Group == Group.LIGHT) && (hardwareEvent.Source == HardwareSource.Switch))
+                        switch (hardwareEvent.Source)
+                        {
+                            case HardwareSource.Switch:
+                                Console.WriteLine("Received button {0} {1} state {2}",
+                                    hardwareEvent.Event,
+                                    hardwareEvent.Group,
+                                    hardwareEvent.ValueAsBool() ? "pressed" : "released");
+                                break;
+                            case HardwareSource.Encoder:
+                                Console.WriteLine("Received encoder {0} {1} state {2}",
+                                    hardwareEvent.Event,
+                                    hardwareEvent.Group,
+                                    hardwareEvent.ValueAsBool() ? "turned clockwise" : "turned counter clockwise");
+                                break;
+                            case HardwareSource.Axis:
+                                Console.WriteLine("Received an axis ({0}) event with value {1}",
+                                    hardwareEvent.Event,
+                                    hardwareEvent.ValueAsInt());
+                                break;
+                            default:
+                                Console.WriteLine("Received an event {0} state {1}", hardwareEvent.Event, hardwareEvent.ValueAsBool());
+                                break;
+                        }
+
+                        if ((hardwareEvent.Group == Group.EXTLT) && (hardwareEvent.Source == HardwareSource.Switch))
                         {
                             switch (hardwareEvent.Event)
                             {

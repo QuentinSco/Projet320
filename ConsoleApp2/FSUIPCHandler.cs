@@ -26,16 +26,16 @@ namespace FAQU
         public static readonly int TANK_RIGHT_TIP_ID = 6;
         //
         private static readonly Int32 LIGHT_ADDRESS = 0x0D0C;
-        public static readonly int LIGHT_INDEX_NAVIGATION = 0
-        public static readonly int LIGHT_INDEX_BEACON = 1
-        public static readonly int LIGHT_INDEX_LANDING = 2
-        public static readonly int LIGHT_INDEX_TAXI = 3
-        public static readonly int LIGHT_INDEX_STROBES = 4
-        public static readonly int LIGHT_INDEX_INSTRUMENTS = 5
-        public static readonly int LIGHT_INDEX_RECOGNITION = 6
-        public static readonly int LIGHT_INDEX_WING = 7
-        public static readonly int LIGHT_INDEX_LOGO = 8
-        public static readonly int LIGHT_INDEX_CABIN = 9
+        public static readonly int LIGHT_INDEX_NAVIGATION = 0;
+        public static readonly int LIGHT_INDEX_BEACON = 1;
+        public static readonly int LIGHT_INDEX_LANDING = 2;
+        public static readonly int LIGHT_INDEX_TAXI = 3;
+        public static readonly int LIGHT_INDEX_STROBES = 4;
+        public static readonly int LIGHT_INDEX_INSTRUMENTS = 5;
+        public static readonly int LIGHT_INDEX_RECOGNITION = 6;
+        public static readonly int LIGHT_INDEX_WING = 7;
+        public static readonly int LIGHT_INDEX_LOGO = 8;
+        public static readonly int LIGHT_INDEX_CABIN = 9;
         public struct StructLightsFSUIPC
         {
             public char bits;
@@ -46,7 +46,7 @@ namespace FAQU
             public bool this[int index]
             {
                 get { return ((bits & (1 << index)) != 0); }
-                set { bits = (value) ? (bits |= (1 << index)) : (bits &= ~(1 << index)); }
+                set { bits = (value) ? (bits |= (char)(1 << index)) : (bits &= (char)~(1 << index)); }
             }
         };
         private StructLightsFSUIPC ovhd_lights;
@@ -57,7 +57,7 @@ namespace FAQU
         {
             this.fsuipcClient = new Fsuipc();
             this.isConnected = false;
-            this.ovhd_lights = new StructLightsFSUIPC(0);
+            this.ovhd_lights = new StructLightsFSUIPC((char)0);
         }
 
         public bool IsConnected
@@ -238,11 +238,11 @@ namespace FAQU
 
             if(result)
             {
-                ovhd_lights.bits = dwResult;
+                ovhd_lights.bits = (char)dwResult;
             }
             else
             {
-                ovhd_lights.bits = 0;
+                ovhd_lights.bits = (char)0;
                 PrintErrorCode(dwResult);
             }
 
