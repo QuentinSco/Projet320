@@ -25,12 +25,39 @@ namespace FAQU
         public static readonly int TANK_RIGHT_AUX_ID = 5;
         public static readonly int TANK_RIGHT_TIP_ID = 6;
         //
+        private static readonly Int32 LIGHT_ADDRESS = 0x0D0C;
+        public static readonly int LIGHT_INDEX_NAVIGATION = 0
+        public static readonly int LIGHT_INDEX_BEACON = 1
+        public static readonly int LIGHT_INDEX_LANDING = 2
+        public static readonly int LIGHT_INDEX_TAXI = 3
+        public static readonly int LIGHT_INDEX_STROBES = 4
+        public static readonly int LIGHT_INDEX_INSTRUMENTS = 5
+        public static readonly int LIGHT_INDEX_RECOGNITION = 6
+        public static readonly int LIGHT_INDEX_WING = 7
+        public static readonly int LIGHT_INDEX_LOGO = 8
+        public static readonly int LIGHT_INDEX_CABIN = 9
+        public struct StructLightsFSUIPC
+        {
+            public char bits;
+            public StructLightsFSUIPC(char initVal)
+            {
+                this.bits = initVal;
+            }
+            public bool this[int index]
+            {
+                get { return ((bits & (1 << index)) != 0); }
+                set { bits = (value) ? (bits |= (1 << index)) : (bits &= ~(1 << index)); }
+            }
+        };
+        private StructLightsFSUIPC ovhd_lights;
+        //
         // TODO: add exceptions for results = false
 
         public FSUIPCHandler()
         {
             this.fsuipcClient = new Fsuipc();
             this.isConnected = false;
+            this.ovhd_lights = new StructLightsFSUIPC(0);
         }
 
         public bool IsConnected
@@ -191,6 +218,36 @@ namespace FAQU
                 PrintErrorCode(dwResult);
         }
 
+        // LIGHTS
+        public void SetNewOvhdLightValue(int light_id, bool value)
+        {
+            ovhd_lights[light_id] = value;
+
+            result = fsuipcClient.FSUIPC_Write(LIGHT_ADDRESS, ovhd_lights.bits, ref token, ref dwResult);
+            result &= fsuipcClient.FSUIPC_Process(ref dwResult);
+
+            if(!result)
+                PrintErrorCode(dwResult);
+        }
+
+        public bool GetOvhdLightValue(int light_id)
+        {
+            result = this.fsuipcClient.FSUIPC_Read(LIGHT_ADDRESS, 1, ref token, ref dwResult);
+            result &= this.fsuipcClient.FSUIPC_Process(ref dwResult);
+            result &= this.fsuipcClient.FSUIPC_Get(ref token, ref dwResult);
+
+            if(result)
+            {
+                ovhd_lights.bits = dwResult;
+            }
+            else
+            {
+                ovhd_lights.bits = 0;
+                PrintErrorCode(dwResult);
+            }
+
+            return ovhd_lights[light_id];
+        }
 
         public static void PrintErrorCode(int code)
         {

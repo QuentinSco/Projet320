@@ -20,6 +20,8 @@ namespace FAQU
         private FSUIPCHandler fsuipcHandler;
         private Fsuipc fsuipcClient = new Fsuipc();
         //
+        private bool landing_left_light = false;
+        private bool landing_right_light = false;
 
         public FAQUBrickOverhead()
         {
@@ -58,7 +60,6 @@ namespace FAQU
                 result = this.fsuipcHandler.Connect();
                 if (result)
                 {
-                    // TestToCarryOut();
                     this.hardwareClient.RegisterEvents(Switches.OVHD.All.Concat(Encoders.OVHD.All));
                     SetNextState(State.Offline);
                 }
@@ -78,88 +79,87 @@ namespace FAQU
             {
                 case State.Running:
                     {
-                        // TODO: all the work
                         if ((hardwareEvent.Group == Group.LIGHT) && (hardwareEvent.Source == HardwareSource.Switch))
                         {
                             switch (hardwareEvent.Event)
                             {
-                                // Skalarki    FSUIPC
-                                // NAVLOGO      NAVLOGO
-                                // Beacon       BEACON
-                                // LAND LEFT    LANDING
-                                // LAND RIGHT   LANDING
-                                // Taxi         NOSE
-                                // Strobes      Strobe
-                                // --           Instruments
-                                // Recognition  RunwayTurnOff
-                                // Wing         WING
-                                // --           Logo
-                                // --           Cabin
-
                                 case Event.BEACONLIGHTSOFF:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_BEACON, false);
                                         break;
                                     }
                                 case Event.BEACONLIGHTSON:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_BEACON, true);
                                         break;
                                     }
                                 case Event.LEFTLANDINGLIGHTON:
                                     {
-                                        break;
-                                    }
-                                case Event.LEFTLANDINGLIGHTRETRACTED:
-                                    {
+                                        landing_left_light = event_value;
+
+                                        this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_LANDING, landing_left_light & landing_right_light);
                                         break;
                                     }
                                 case Event.RIGHTLANDINGLIGHTON:
                                     {
-                                        break;
-                                    }
-                                case Event.RIGHTLANDINGLIGHTRETRACTED:
-                                    {
+                                        landing_right_light = event_value;
+
+                                        this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_LANDING, landing_left_light & landing_right_light);
                                         break;
                                     }
                                 case Event.NAVLOGOLIGHTSOFF:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_NAVIGATION, false);
                                         break;
                                     }
                                 case Event.NAVLOGOLIGHTSON:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_NAVIGATION, true);
                                         break;
                                     }
                                 case Event.NOSELIGHTOFF:
                                     {
-                                        break;
-                                    }
-                                case Event.NOSELIGHTTO:
-                                    {
+                                        this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_TAXI, !event_value);
                                         break;
                                     }
                                 case Event.RWYLIGHTSOFF:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_RECOGNITION, false);
                                         break;
                                     }
                                 case Event.RWYLIGHTSON:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_RECOGNITION, true);
                                         break;
                                     }
                                 case Event.STROBESLIGHTSOFF:
                                     {
-                                        break;
-                                    }
-                                case Event.STROBESLIGHTSON:
-                                    {
+                                        this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_STROBES, !event_value);
                                         break;
                                     }
                                 case Event.WINGLIGHTSOFF:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_WING, false);
                                         break;
                                     }
                                 case Event.WINGLIGHTSON:
                                     {
+                                        if(event_value)
+                                            this.fsuipcHandler.SetNewOvhdLightValue(FSUIPCHandler.LIGHT_INDEX_WING, true);
                                         break;
                                     }
+                                // NOT USED IN CURRENT SUPPORTED AIRCRAFT
+                                // case Event.LEFTLANDINGLIGHTRETRACTED:
+                                // case Event.RIGHTLANDINGLIGHTRETRACTED:
+                                // case Event.NOSELIGHTTO:
+                                // case Event.STROBESLIGHTSON:
                             }
                         }
                         UpdateLCD();
@@ -172,13 +172,6 @@ namespace FAQU
                     }
 
             }
-
-
-            // Filter (Group = Refuel) and (Source = Switch) and (Event = True)
-            if ((hardwareEvent.Group == Group.REFUEL) && (hardwareEvent.Source == HardwareSource.Switch) && (hardwareEvent.ValueAsBool() == true))
-            {
-
-            }
         }
 
         private void UpdateLCD()
@@ -187,14 +180,16 @@ namespace FAQU
             {
                 case State.Offline:
                     {
-                        hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "   ");
-                        hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "   ");
+                        // TODO
+                        // hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "   ");
+                        // hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "   ");
                         break;
                     }
                 case State.Fault:
                     {
-                        hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "---");
-                        hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "---");
+                        // TODO
+                        // hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.ACTUAL, "---");
+                        // hardwareClient.SetDisplayText(Displays.OVHD.REFUEL.PRESELECTED, "---");
                         break;
                     }
             }
@@ -209,22 +204,22 @@ namespace FAQU
             {
                 case State.Running:
                     {
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, true);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, true);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, true);
                         break;
                     }
                 case State.Fault:
                     {
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, true);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
-                        hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRON }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.PWRFAULT }, true);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGON }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.REFUELINGFAULT }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.END }, false);
+                        // hardwareClient.SetOutputs(new[] { Outputs.OVHD.REFUEL.CKPT }, false);
                         break;
                     }
             }
