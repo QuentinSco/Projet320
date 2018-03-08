@@ -41,7 +41,15 @@ namespace FAQU
                 faqu_overhead.Setup(eventClient, fsuipcHandler);
                 fAQU.Setup(eventClient, fsuipcHandler);
 
-                eventClient.ConnectAsync().Wait();
+                // THe connection to skalarki hardware must be done here (only once)
+                try
+                {
+                    hardwareClient.ConnectAsync().Wait();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Skalarki.ConnectAsync(): " + e.Message);
+                }
 
                 Console.ReadLine();
                 eventClient.Disconnect();
